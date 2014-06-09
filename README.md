@@ -1,6 +1,6 @@
 # CTail
 
-`ctail` is a simple python script to tail log files(like tail -f).
+`ctail` is a simple script to tail log files continuously(like tail -f), written in python(>=2.4).
 
 ##Installation
 
