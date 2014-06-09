@@ -1,6 +1,6 @@
 # CTail
 
-simple python script to tail log files(like tail -f).
+`ctail` is a simple python script to tail log files(like tail -f).
 
 ##Installation
 
@@ -18,3 +18,9 @@ $ ./install.sh
 - Highlight values in brackets.
 
 ##Screenshot
+
+normal `tail -f`
+![tailf_sample.png](https://bitbucket.org/repo/GRXAR6/images/1708598969-tailf_sample.png)
+
+`ctail`
+![ctail_sample.png](https://bitbucket.org/repo/GRXAR6/images/2968561398-ctail_sample.png)
