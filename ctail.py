@@ -42,6 +42,7 @@ def colorize_log(log):
 	else:
 		level = Colors['level'] + level
 	section = Colors['section'] + section
+	section = re.sub("\[([^]]*)\]", "[" + Colors['number'] + r"\1" + Colors['section'] + "]", section)
 	code = Colors['code'] + code
 	description = re.sub("\(([^)]*)\)", "(" + Colors['number'] + r"\1" + Colors['description'] + ")", description)
 	description = re.sub("\[([^]]*)\]", "[" + Colors['number'] + r"\1" + Colors['description'] + "]", description)
@@ -62,7 +63,13 @@ def get_path_of(filename):
 
 def tail(filename):
 	path = get_path_of(filename)
-	current_file = newest_file_in(path)
+	try:
+		current_file = newest_file_in(path)
+	except:
+		print "cannot file files in", path
+		usage()
+		return
+
 	f = open(current_file)
 	print colorize_ok('>>> open %s' % current_file)
 	try:
