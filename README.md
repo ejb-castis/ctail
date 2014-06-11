@@ -19,4 +19,4 @@ $ ./install.sh
 
 ##Screenshot
 
-![](ctail_sample.png)
+![](sample.png)
