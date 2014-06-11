@@ -41,8 +41,8 @@ def colorize_log(log):
 		level = Colors['error'] + level
 	else:
 		level = Colors['level'] + level
-	section = Colors['section'] + section
 	section = re.sub("\[([^]]*)\]", "[" + Colors['number'] + r"\1" + Colors['section'] + "]", section)
+	section = Colors['section'] + section
 	code = Colors['code'] + code
 	description = re.sub("\(([^)]*)\)", "(" + Colors['number'] + r"\1" + Colors['description'] + ")", description)
 	description = re.sub("\[([^]]*)\]", "[" + Colors['number'] + r"\1" + Colors['description'] + "]", description)
