@@ -19,4 +19,4 @@ $ ./install.sh
 
 ##Screenshot
 
-![](sample.png)
+![](https://bytebucket.org/teamd7/ctail/raw/d5aa3c4926e24104b5bf7670ec9f1a2083463e7f/sample.png)
