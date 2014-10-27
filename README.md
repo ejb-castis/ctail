@@ -1,22 +1,20 @@
 # CTail
 
-`ctail` is a simple script to tail log files continuously(like tail -f), written in python(>=2.4).
+최신 파일을 계속해서 tail -f 해주는 python(>=2.4) 스크립트
 
-##Installation
+## 기능
 
-To install, simply:
+- 폴더 내 최신 파일을 지속적으로 열어서 tail -f 해줍니다.
+- cilog 포멧에 대한 하이라이트
+- 괄호 내 단어들에 대한 하이라이트
+
+## 설치
 
 ```
-$ ./install.sh
+$ sudo ./install.sh
 ```
 
-## Features
-
-- Continuously open and tail latest file in the directory.
-- Highlight columns
-- Highlight Error, Fail, Warning level keywords
-- Highlight values in brackets.
-
-##Screenshot
+## 데모 
 
 ![](https://bytebucket.org/teamd7/ctail/raw/d5aa3c4926e24104b5bf7670ec9f1a2083463e7f/sample.png)
+
