@@ -19,10 +19,11 @@ Colors = {
         "level": '\033[0;38;05;81m',
         "section": '\033[0m',
         "code": '\033[0m',
-        "description": '\033[0;38;05;222m',
+        # "description": '\033[0;38;05;222m',
+        "description": '\033[0;38;05;187m',
         "error": '\033[0;38;05;161m',
         "ok": '\033[0;38;05;118m',
-        "number": '\033[0;38;05;222m',
+        "number": '\033[0;38;05;141m',
         "keyword": '\033[0;38;05;208m',
         "endc": '\033[0m'}
 
@@ -45,8 +46,8 @@ def colorize_log(log):
     section = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] + r"\1" + Colors['section'] + "]", section)
     section = Colors['section'] + section
     code = Colors['code'] + code
-    description = re.sub("\(([^)]*)\)", "(" + Colors['number'] + r"\1" + Colors['description'] + ")", description)
     description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] + r"\1" + Colors['description'] + "]", description)
+    description = re.sub("\(([^)]*)\)", "(" + Colors['keyword'] + r"\1" + Colors['description'] + ")", description)
     description = Colors['description'] + description + Colors['endc']
     return ','.join([name, id, date, time, level, section, code, description])
 
