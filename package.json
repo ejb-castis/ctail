@@ -1,0 +1,11 @@
+{
+  "name": "ctail",
+  "version": "0.1.0",
+  "description": "continuous, colored tail -f",
+  "bin": {
+    "ctail": "./ctail.py"
+  },
+  "service": null,
+  "dependencies": null
+}
+
