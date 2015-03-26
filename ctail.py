@@ -10,6 +10,7 @@ import time
 import os
 import sys
 import re
+import fileinput
 
 Colors = {
         "name": '\033[0m',
@@ -65,6 +66,7 @@ event_level = {
         128: 'fail',
         256: 'except'}
 
+
 def get_event_type_string(event):
     try:
         s = event_type_major[int(event, 0)&0xFFFF0000]
@@ -74,11 +76,14 @@ def get_event_type_string(event):
     except:
         return ''
 
+
 def get_event_level_string(level):
     return event_level[int(level)]
 
+
 def get_time_string_gmt_to_kst(timestamp):
     return time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(float(timestamp)+32400))
+
 
 def translate(log):
     try:
@@ -89,6 +94,7 @@ def translate(log):
     level = get_event_level_string(level)
     datetime = get_time_string_gmt_to_kst(datetime)
     return ','.join([event, level, datetime, desc])
+
 
 def format_eventlog(log):
     try:
@@ -104,8 +110,10 @@ def format_eventlog(log):
     desc = re.sub("(\([^)]+\))", Colors['purple'] + r"\1" + Colors['endc'] , desc)
     return '%s %s %s %s' % (datetime, event, level, desc)
 
+
 def colorize_ok(str):
     return Colors['ok'] + str + Colors['endc']
+
 
 def format_cilog(log):
     try:
@@ -128,17 +136,33 @@ def format_cilog(log):
     description = Colors['description'] + description + Colors['endc']
     return ','.join([name, id, date, time, level, section, code, description])
 
+
+def print_format_log(log):
+    if log.startswith('0x'):
+        print format_eventlog(translate(log)),
+    else:
+        print format_cilog(log),
+
+
 def newest_file_in(path):
     mtime = lambda f: os.stat(os.path.join(path, f)).st_mtime
     ls = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     newest_file_name = list(sorted(ls, key=mtime))[-1]
     return os.path.join(path, newest_file_name)
 
+
 def get_path_of(filename):
     path = os.path.realpath(filename)
     if not os.path.isdir(path):
         path = os.path.dirname(path)
     return path
+
+
+def cat():
+    for line in fileinput.input():
+        print_format_log(line)
+        sys.stdout.softspace=0
+
 
 def tail(filename):
     path = get_path_of(filename)
@@ -150,10 +174,6 @@ def tail(filename):
         return
 
     f = open(current_file)
-    if "EventLog" in current_file:
-        log_type = "eventlog"
-    else:
-        log_type = "cilog"
     print colorize_ok('>>> open %s' % current_file)
     try:
         f.seek(-2048, 2)
@@ -163,11 +183,7 @@ def tail(filename):
     while True:
         line = f.readline()
         if line:
-            if log_type == "cilog":
-                print format_cilog(line),
-            else:
-                print format_eventlog(translate(line)),
-
+            print_format_log(line)
             sys.stdout.softspace=0
         else:
             last_file = newest_file_in(path)
@@ -182,8 +198,10 @@ def tail(filename):
                 print colorize_ok('>>> open %s' % current_file)
             time.sleep(0.1)
 
+
 def sig_handler(signal, frame):
     sys.exit(0)
+
 
 def usage():
     print 'Usage: %s FILE' % os.path.basename(sys.argv[0])
@@ -191,9 +209,14 @@ def usage():
     print 'Continuosly tail last file in DIRECTORY(or the directory of FILE).'
     print 'Report bugs to <mwpark@castis.com>'
 
+
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    signal.signal(signal.SIGINT, sig_handler)
+    if len(sys.argv) != 2 and sys.stdin.isatty():
         usage()
         sys.exit(1)
-    signal.signal(signal.SIGINT, sig_handler)
-    tail(sys.argv[1])
+
+    if len(sys.argv) == 1 and not sys.stdin.isatty():
+        cat()
+    else:
+        tail(sys.argv[1])
