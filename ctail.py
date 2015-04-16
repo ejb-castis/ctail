@@ -187,7 +187,7 @@ def tail(filename):
             sys.stdout.softspace=0
         else:
             last_file = newest_file_in(path)
-            if (current_file != last_file) or os.path.getsize(last_file) < f.tell():
+            if (current_file != last_file) or os.path.getsize(last_file) != f.tell():
                 current_file = last_file
                 f.close()
                 f = open(os.path.join(path, current_file))
