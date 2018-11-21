@@ -4,13 +4,13 @@
 Created on 2014. 06. 09
 @author: <mwpark@castis.com>
 '''
-
 import signal
 import time
 import os
 import sys
 import re
 import fileinput
+import getopt
 
 Colors = {
         "name": '\033[0m',
@@ -150,31 +150,41 @@ def newest_file_in(path):
     newest_file_name = list(sorted(ls, key=mtime))[-1]
     return os.path.join(path, newest_file_name)
 
-
 def get_path_of(filename):
     path = os.path.realpath(filename)
     if not os.path.isdir(path):
         path = os.path.dirname(path)
     return path
 
+def exist(filename):
+    return os.path.isfile(filename) or os.path.islink(filename)
 
 def cat():
     for line in fileinput.input():
         print_format_log(line)
         sys.stdout.softspace=0
 
-
-def tail(filename):
+def tail(filename, follow_current_file, retry):
     path = get_path_of(filename)
-    try:
+    if follow_current_file:
+      if not exist(filename):
+        print "Cannot find file: ", filename
+        print ""
+        usage()
+        return 
+      else:
+        current_file = filename
+    else:
+      try:
         current_file = newest_file_in(path)
-    except:
-        print "cannot file files in", path
+      except:
+        print "Cannot find files in", path
+        print ""
         usage()
         return
 
     f = open(current_file)
-    print colorize_ok('>>> open %s' % current_file)
+    print colorize_ok('>>> Open %s' % current_file)
     try:
         f.seek(-2048, 2)
         f.readline()
@@ -186,7 +196,12 @@ def tail(filename):
             print_format_log(line)
             sys.stdout.softspace=0
         else:
-            last_file = newest_file_in(path)
+          try:
+            if follow_current_file:
+              last_file = current_file
+            else:
+              last_file = newest_file_in(path)
+
             if (current_file != last_file) or os.path.getsize(last_file) < f.tell():
                 current_file = last_file
                 f.close()
@@ -197,26 +212,64 @@ def tail(filename):
                     log_type = "cilog"
                 print colorize_ok('>>> open %s' % current_file)
             time.sleep(0.1)
+          except:
+            if retry:
+              time.sleep(1)
+            else:
+              f.close()
+              sys.exit(0)
 
 
 def sig_handler(signal, frame):
     sys.exit(0)
 
-
 def usage():
-    print 'Usage: %s FILE' % os.path.basename(sys.argv[0])
-    print ' or :  %s DIRECTORY' % os.path.basename(sys.argv[0])
-    print 'Continuosly tail last file in DIRECTORY(or the directory of FILE).'
-    print 'Report bugs to <mwpark@castis.com>'
+    print 'Usage: %s [option] FILE' % os.path.basename(sys.argv[0])
+    print ' or :  %s [option] DIRECTORY' % os.path.basename(sys.argv[0])
+    print ''
+    print 'Continuosly tail the newest file in DIRECTORY(or in the directory of FILE).'
+    print 'Options:'
+    print '-f             follow FILE, not to tail the newest file in the directory of FILE'
+    print '-F             same as -f --retry'
+    print '-r, --retry    keep trying to open a file if it is inaccessible. sleep for 1.0 sec between retry iterations'
+    
+def main():
+    signal.signal(signal.SIGINT, sig_handler)
+    if len(sys.argv) == 1 and not sys.stdin.isatty():
+      cat()
+      return
 
+    if len(sys.argv) < 2 and sys.stdin.isatty():
+      usage()
+      sys.exit(1)
+
+    filename='.'
+    follow_file=False
+    retry=False
+  
+    if len(sys.argv) >= 2:
+      try:
+        options, args = getopt.getopt(sys.argv[1:], "Ffhr", ["help", "retry"])
+      except:
+        usage()
+        sys.exit(1)  
+
+      for op, p in options:
+        if op=="-f":
+          follow_file=True
+        elif op=="-F":
+          follow_file=True
+          retry=True
+        elif op=="-r" or op=="--retry":  
+          retry=True
+        elif op=="-h" or op=="--help":
+          usage()
+          sys.exit(1)
+
+    if len(args) > 0:
+      filename=args[0] 
+
+    tail(filename, follow_file, retry)
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGINT, sig_handler)
-    if len(sys.argv) != 2 and sys.stdin.isatty():
-        usage()
-        sys.exit(1)
-
-    if len(sys.argv) == 1 and not sys.stdin.isatty():
-        cat()
-    else:
-        tail(sys.argv[1])
+  main()
