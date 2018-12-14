@@ -183,6 +183,7 @@ def tail(filename, follow_current_file, retry):
         usage()
         return
 
+    reopen = False   
     f = open(current_file)
     print colorize_ok('>>> Open %s' % current_file)
     try:
@@ -191,33 +192,43 @@ def tail(filename, follow_current_file, retry):
     except:
         pass
     while True:
+      try:
         line = f.readline()
-        if line:
-            print_format_log(line)
-            sys.stdout.softspace=0
+      except:
+        if retry:
+          reopen = True
+          line=""
+          pass
         else:
-          try:
-            if follow_current_file:
-              last_file = current_file
-            else:
-              last_file = newest_file_in(path)
+          f.close()
+          sys.exit(0)
 
-            if (current_file != last_file) or os.path.getsize(last_file) < f.tell():
-                current_file = last_file
-                f.close()
-                f = open(os.path.join(path, current_file))
-                if "EventLog" in current_file:
-                    log_type = "eventlog"
-                else:
-                    log_type = "cilog"
-                print colorize_ok('>>> open %s' % current_file)
-            time.sleep(0.1)
-          except:
-            if retry:
-              time.sleep(1)
+      if line:
+        print_format_log(line)
+        sys.stdout.softspace=0
+      else:
+        try:
+          if follow_current_file:
+            last_file = current_file
+          else:
+            last_file = newest_file_in(path)
+
+          if reopen==True or (current_file != last_file) or os.path.getsize(last_file) < f.tell():
+            current_file = last_file
+            f.close()
+            if follow_current_file:
+              f = open(current_file)
             else:
-              f.close()
-              sys.exit(0)
+              f = open(os.path.join(path, current_file))                                                        
+              print colorize_ok('>>> open %s' % current_file)
+            reopen = False
+          time.sleep(0.1)
+        except:
+          if retry:
+            time.sleep(0.5)
+          else:
+            f.close()
+            sys.exit(0)
 
 
 def sig_handler(signal, frame):
