@@ -170,7 +170,6 @@ def tail(filename, follow_current_file, retry):
       if not exist(filename):
         print "Cannot find file: ", filename
         print ""
-        usage()
         return 
       else:
         current_file = filename
@@ -180,28 +179,24 @@ def tail(filename, follow_current_file, retry):
       except:
         print "Cannot find files in", path
         print ""
-        usage()
         return
 
-    reopen = False   
-    f = open(current_file)
-    print colorize_ok('>>> Open %s' % current_file)
     try:
-        f.seek(-2048, 2)
-        f.readline()
+      f = open(current_file)
+      print colorize_ok('>>> Open %s' % current_file)
+    
+      f.seek(-2048, 2)
+      f.readline()
     except:
-        pass
+      f.close()
+      return
+
     while True:
       try:
         line = f.readline()
       except:
-        if retry:
-          reopen = True
-          line=""
-          pass
-        else:
-          f.close()
-          sys.exit(0)
+        f.close()
+        return
 
       if line:
         print_format_log(line)
@@ -213,7 +208,7 @@ def tail(filename, follow_current_file, retry):
           else:
             last_file = newest_file_in(path)
 
-          if reopen==True or (current_file != last_file) or os.path.getsize(last_file) < f.tell():
+          if (current_file != last_file) or os.path.getsize(last_file) < f.tell():
             current_file = last_file
             f.close()
             if follow_current_file:
@@ -240,10 +235,14 @@ def usage():
     print ''
     print 'Continuosly tail the newest file in DIRECTORY(or in the directory of FILE).'
     print 'Options:'
+    print '-v             version'
     print '-f             follow FILE, not to tail the newest file in the directory of FILE'
     print '-F             same as -f --retry'
     print '-r, --retry    keep trying to open a file if it is inaccessible. sleep for 1.0 sec between retry iterations'
-    
+
+def print_version():
+    print '0.9.0'
+
 def main():
     signal.signal(signal.SIGINT, sig_handler)
     if len(sys.argv) == 1 and not sys.stdin.isatty():
@@ -258,29 +257,39 @@ def main():
     follow_file=False
     retry=False
   
-    if len(sys.argv) >= 2:
-      try:
-        options, args = getopt.getopt(sys.argv[1:], "Ffhr", ["help", "retry"])
-      except:
-        usage()
-        sys.exit(1)  
+    try:
+      options, args = getopt.getopt(sys.argv[1:], "vFfhr", ["help", "retry"])
+    except getopt.GetoptError as err:
+      print str(err)
+      print ""
+      usage()
+      sys.exit(1)  
 
-      for op, p in options:
-        if op=="-f":
-          follow_file=True
-        elif op=="-F":
-          follow_file=True
-          retry=True
-        elif op=="-r" or op=="--retry":  
-          retry=True
-        elif op=="-h" or op=="--help":
-          usage()
-          sys.exit(1)
+    for op, p in options:
+      if op=="-v":
+        print_version()
+        sys.exit(1)
+      elif op=="-f":
+        follow_file=True
+      elif op=="-F":
+        follow_file=True
+        retry=True
+      elif op=="-r" or op=="--retry":  
+        retry=True
+      elif op=="-h" or op=="--help":
+        usage()
+        sys.exit(1)
 
     if len(args) > 0:
-      filename=args[0] 
+      filename=args[0]
+    
+    print "filename:" , filename
+    print "follow_file:" , follow_file
+    print "retry:" , retry
 
-    tail(filename, follow_file, retry)
+    print "path:" , get_path_of(filename)
+
+    # tail(filename, follow_file, retry)
 
 if __name__ == '__main__':
   main()
