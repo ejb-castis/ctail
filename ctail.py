@@ -307,15 +307,6 @@ def reopen_tail(filename, follow_file, target_filename, target_file_offset):
 
     return f, target_filename, target_file_offset, False
 
-def open_last_tail():
-    target_filename = _last_target_filename
-    target_file_offset, exist = get_offset(target_filename)
-    f, error = open_head(target_filename, target_file_offset)
-    if error: return None, None, None, True
-
-    return f, target_filename, target_file_offset, False
-
-
 def tail(filename, follow_file):
     target, exist = get_tail_filename(filename, follow_file)
     if not exist: return
@@ -324,7 +315,9 @@ def tail(filename, follow_file):
         f, error = open_tail(target)
         if error: return
     else:
-        f, target, offset, error = open_last_tail();
+        target = _last_target_filename
+        offset, exist = get_offset(target)
+        f, target, offset, error = reopen_tail(filename, follow_file, target, offset)
         if error: return
 
     while True:
@@ -340,8 +333,10 @@ def tail(filename, follow_file):
 
 def sig_handler(signal, frame):
     if _verbose: 
+        offset, exist = get_offset(_last_target_filename)
         print colorize_ok("\n>>> Open files :%s" % _fileoffset_repository),
-        print colorize_ok("\n>>> Last Open :%s" % _last_target_filename)            
+        print colorize_ok("\n>>> Last Open :%s" % _last_target_filename), 
+        print colorize_ok(", offset :%s" % offset)
     sys.exit(0)
 
 def usage():
