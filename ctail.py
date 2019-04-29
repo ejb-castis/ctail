@@ -68,7 +68,6 @@ event_level = {
     128: 'fail',
     256: 'except'}
 
-
 def get_event_type_string(event):
     try:
         s = event_type_major[int(event, 0) & 0xFFFF0000]
@@ -86,15 +85,12 @@ def get_event_level_string(level):
     except Exception as e:
         return ''
 
-
 def get_time_string_gmt_to_kst(timestamp):
     try:
-        s = time.strftime('%Y-%m-%d %H:%M:%S',
-                          time.gmtime(float(timestamp)+32400))
+        s = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(float(timestamp)+32400))
         return s
     except Exception as e:
         return ''
-
 
 def translate(log):
     try:
@@ -105,7 +101,6 @@ def translate(log):
     level = get_event_level_string(level)
     datetime = get_time_string_gmt_to_kst(datetime)
     return ','.join([event, level, datetime, desc])
-
 
 def format_eventlog(log):
     try:
@@ -120,17 +115,11 @@ def format_eventlog(log):
     desc = re.sub("\[([^](]*)\]", "[" + Colors['keyword'] +
                   r"\1" + Colors['endc'] + "]", desc)
     desc = re.sub("\(([^)]*)\)", "(" + Colors['purple'] +
-                  r"\1" + Colors['endc'] + ")", desc)
-    desc = re.sub(":([^,]*)", ":" + Colors['value'] +
-                  r"\1" + Colors['endc'], desc)
-    desc = re.sub("=([^,]*)", "=" + Colors['value'] +
-                  r"\1" + Colors['endc'], desc)
+                  r"\1" + Colors['endc'] + ")" , desc)
     return '%s %s %s %s' % (datetime, event, level, desc), False
-
 
 def colorize_ok(str):
     return Colors['ok'] + str + Colors['endc']
-
 
 def format_cilog(log):
     try:
@@ -147,22 +136,15 @@ def format_cilog(log):
     else:
         level = Colors['level'] + level + Colors['endc']
     section = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                     r"\1" + Colors['section'] + "]", section)
+                     r"\1" + Colors['endc'] + "]", section)
     section = Colors['section'] + section + Colors['endc']
     code = Colors['code'] + code + Colors['endc']
     description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                         r"\1" + Colors['description'] + "]", description)
+                         r"\1" + Colors['endc'] + Colors['description'] + "]", description)
     description = re.sub("\(([^)]*)\)", "(" + Colors['purple'] +
-                         r"\1" + Colors['description'] + ")", description)
-    description = re.sub(":([^,]*)", ":" + Colors['value'] +
-                         r"\1" + Colors['endc'], description)
-    description = re.sub("([\w]*)=", Colors['variable'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + "=", description)
-    description = re.sub("=([^,]*)", "=" + Colors['value'] +
-                         r"\1" + Colors['endc'] + Colors['description'], description)
+                         r"\1" + Colors['endc'] + Colors['description'] + ")", description)
     description = Colors['description'] + description + Colors['endc']
     return ','.join([name, id, date, time, level, section, code, description]), False
-
 
 def print_format_log(log):
     if log.startswith('0x'):
@@ -171,13 +153,11 @@ def print_format_log(log):
         log, error = format_cilog(log)
     print log,
 
-
 def newest_file_in(path):
     def mtime(f): return os.stat(os.path.join(path, f)).st_mtime
     ls = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     newest_file_name = list(sorted(ls, key=mtime))[-1]
     return os.path.join(path, newest_file_name)
-
 
 def get_path_of(filename):
     path = os.path.realpath(filename)
@@ -185,28 +165,24 @@ def get_path_of(filename):
         path = os.path.dirname(path)
     return path
 
-
 def exist_file(filename):
     return os.path.isfile(filename) or os.path.islink(filename)
 
-
 def exist_directory(directory):
     return os.path.exists(directory)
-
 
 def cat():
     for line in fileinput.input():
         print_format_log(line)
         sys.stdout.softspace = 0
 
-
 def open_head(filename, offset):
     global _last_target_filename
     try:
         f = open(filename)
-        if _verbose and _last_target_filename != filename:
+        if _verbose and _last_target_filename != filename: 
             print colorize_ok('>>> Open :%s' % filename),
-            print ", offset:", offset
+            print ", offset:" , offset
         f.seek(offset, 0)
     except Exception as e:
         if _verbose:
@@ -218,7 +194,6 @@ def open_head(filename, offset):
     _last_target_filename = filename
     return f, False
 
-
 def open_tail(filename):
     global _last_target_filename
 
@@ -226,13 +201,13 @@ def open_tail(filename):
         f = open(filename)
         size = os.path.getsize(filename)
 
-        if _verbose and _last_target_filename != filename:
+        if _verbose and _last_target_filename != filename: 
             print colorize_ok('>>> Open :%s' % filename),
             print colorize_ok(', size :%s' % size)
 
-        if size >= 2048:
+        if size >= 2048: 
             f.seek(-2048, 2)
-            line = f.readline()
+            line = f.readline()                         
     except Exception as e:
         if _verbose:
             print colorize_ok('>>> Error :%s' % filename),
@@ -243,54 +218,46 @@ def open_tail(filename):
     _last_target_filename = filename
     return f, False
 
-
 def get_tail_filename(filename, follow_file):
-
+    
     if follow_file:
-        if not exist_file(filename):
-            if _verbose:
-                print colorize_ok('>>> Not found :%s' % filename)
+        if not exist_file(filename): 
+            if _verbose: print colorize_ok('>>> Not found :%s' % filename)
             return None, False
         tail_file = filename
     else:
         try:
             path = get_path_of(filename)
             if not exist_directory(path):
-                if _verbose:
-                    print colorize_ok('>>> Not found path :%s' % path)
-                return None, False
+              if _verbose: print colorize_ok('>>> Not found path :%s' % path)
+              return None, False
             tail_file = newest_file_in(path)
         except Exception as e:
             if _verbose:
                 print colorize_ok('>>> Error :%s' % path),
                 print e
-            return None, False
+            return None, False   
     return tail_file, True
-
 
 def keep_tail(f):
     while True:
         try:
             line = f.readline()
         except Exception as e:
-            if _verbose:
-                print colorize_ok('>>> Error :' % e)
+            if _verbose: print colorize_ok('>>> Error :' % e)
             f.close()
             return 0, True
-        if line:
+        if line: 
             print_format_log(line)
-            sys.stdout.softspace = 0
-        else:
-            break
+            sys.stdout.softspace=0
+        else: break
     offset = f.tell()
     f.close()
     return offset, False
 
-
 def put_offset(filename, offset):
     global _fileoffset_repository
     _fileoffset_repository[filename] = offset
-
 
 def get_offset(filename):
     global _fileoffset_repository
@@ -300,12 +267,10 @@ def get_offset(filename):
     except Exception as e:
         return 0, False
 
-
 def reopen_tail(filename, follow_file, target_filename, target_file_offset):
     re_target_filename, exist = get_tail_filename(filename, follow_file)
-    if not exist:
-        return None, None, None, True
-
+    if not exist: return None, None, None, True
+    
     if target_filename == re_target_filename:
         try:
             new_target_filename_offset = os.path.getsize(target_filename)
@@ -315,65 +280,52 @@ def reopen_tail(filename, follow_file, target_filename, target_file_offset):
                 print e
             return None, None, None, True
 
-        if target_file_offset <= new_target_filename_offset:
+        if  target_file_offset <= new_target_filename_offset:
             f, error = open_head(target_filename, target_file_offset)
-            if error:
-                return None, None, None, True
+            if error: return None, None, None, True
         else:
             f, error = open_head(target_filename, 0)
-            if error:
-                return None, None, None, True
+            if error: return None, None, None, True
 
     else:
         target_filename = re_target_filename
         target_file_offset, exist = get_offset(target_filename)
         f, error = open_head(target_filename, target_file_offset)
-        if error:
-            return None, None, None, True
+        if error: return None, None, None, True
 
     return f, target_filename, target_file_offset, False
 
-
 def tail(filename, follow_file):
     target, exist = get_tail_filename(filename, follow_file)
-    if not exist:
-        return
+    if not exist: return
 
     if _last_target_filename == '':
         f, error = open_tail(target)
-        if error:
-            return
+        if error: return
     else:
         target = _last_target_filename
         offset, exist = get_offset(target)
-        f, target, offset, error = reopen_tail(
-            filename, follow_file, target, offset)
-        if error:
-            return
+        f, target, offset, error = reopen_tail(filename, follow_file, target, offset)
+        if error: return
 
     while True:
         offset, error = keep_tail(f)
-        if error:
-            return
+        if error: return
 
         put_offset(target, offset)
 
-        f, target, offset, error = reopen_tail(
-            filename, follow_file, target, offset)
-        if error:
-            return
-
+        f, target, offset, error = reopen_tail(filename, follow_file, target, offset)
+        if error : return
+               
         time.sleep(0.01)
 
-
 def sig_handler(signal, frame):
-    if _verbose:
+    if _verbose: 
         offset, exist = get_offset(_last_target_filename)
         print colorize_ok("\n>>> Open files :%s" % _fileoffset_repository),
-        print colorize_ok("\n>>> Last Open :%s" % _last_target_filename),
+        print colorize_ok("\n>>> Last Open :%s" % _last_target_filename), 
         print colorize_ok(", offset :%s" % offset)
     sys.exit(0)
-
 
 def usage():
     print 'Usage: %s [option] FILE' % os.path.basename(sys.argv[0])
@@ -387,10 +339,8 @@ def usage():
     print '-r, --retry    keep trying to open a file if it is inaccessible. sleep for 1.0 sec between retry iterations'
     print '-v, --verbose  print messages verbosely'
 
-
 def print_version():
     print '0.1.2'
-
 
 def main():
     signal.signal(signal.SIGINT, sig_handler)
@@ -416,8 +366,7 @@ def main():
     retry = False
 
     try:
-        options, args = getopt.getopt(
-            sys.argv[1:], "vfhr", ["help", "retry", "version", "verbose"])
+        options, args = getopt.getopt(sys.argv[1:], "vfhr", ["help", "retry", "version", "verbose"])
     except getopt.GetoptError as err:
         print str(err)
         print ""
@@ -445,9 +394,8 @@ def main():
         tail(filename, follow_file)
         if retry:
             time.sleep(1)
-        else:
+        else: 
             break
-
 
 if __name__ == '__main__':
     main()
