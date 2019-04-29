@@ -25,7 +25,7 @@ Colors = {
     "ok": '\033[0;38;05;118m',
     "number": '\033[0;38;05;141m',
     "keyword": '\033[0;38;05;208m',
-    "variable": '\033[0m',
+    "variable": '\033[0;38;05;187m',
     "value": '\033[0;38;05;208m',
     "blue":     '\033[0;38;05;081m',
     "pink":     '\033[1;38;05;161m',
@@ -145,7 +145,7 @@ def format_cilog(log):
     code = Colors['code'] + code + Colors['endc']
     description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
                          r"\1" + Colors['description'] + "]", description)
-    description = re.sub("\(([^)]*)\)", "(" + Colors['keyword'] +
+    description = re.sub("\(([^)]*)\)", "(" + Colors['purple'] +
                          r"\1" + Colors['description'] + ")", description)
     description = re.sub("([\w]*):", Colors['variable'] +
                          r"\1" + Colors['description'] + ":", description)
@@ -177,8 +177,11 @@ def get_path_of(filename):
         path = os.path.dirname(path)
     return path
 
-def exist(filename):
+def exist_file(filename):
     return os.path.isfile(filename) or os.path.islink(filename)
+
+def exist_directory(directory):
+    return os.path.exists(directory)
 
 def cat():
     for line in fileinput.input():
@@ -208,14 +211,15 @@ def open_tail(filename):
 
     try:
         f = open(filename)
-        
-        if _verbose and _last_target_filename != filename: 
-            print colorize_ok('>>> Open :%s' % filename)
+        size = os.path.getsize(filename)
 
-        size = f.tell()
+        if _verbose and _last_target_filename != filename: 
+            print colorize_ok('>>> Open :%s' % filename),
+            print colorize_ok(', size :%s' % size)
+
         if size >= 2048: 
             f.seek(-2048, 2)
-            line = f.readline()
+            line = f.readline()                         
     except Exception as e:
         if _verbose:
             print colorize_ok('>>> Error :%s' % filename),
@@ -227,14 +231,18 @@ def open_tail(filename):
     return f, False
 
 def get_tail_filename(filename, follow_file):
-    path = get_path_of(filename)
+    
     if follow_file:
-        if not exist(filename): 
+        if not exist_file(filename): 
             if _verbose: print colorize_ok('>>> Not found :%s' % filename)
             return None, False
         tail_file = filename
     else:
         try:
+            path = get_path_of(filename)
+            if not exist_directory(path):
+              if _verbose: print colorize_ok('>>> Not found path :%s' % path)
+              return None, False
             tail_file = newest_file_in(path)
         except Exception as e:
             if _verbose:
@@ -253,7 +261,7 @@ def keep_tail(f):
             return 0, True
         if line: 
             print_format_log(line)
-            sys.stdout.softspace=0            ;
+            sys.stdout.softspace=0
         else: break
     offset = f.tell()
     f.close()
