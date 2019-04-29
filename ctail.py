@@ -357,7 +357,7 @@ def usage():
     print '-v, --verbose  print messages verbosely'
 
 def print_version():
-    print '0.9.0'
+    print '0.1.2'
 
 def main():
     signal.signal(signal.SIGINT, sig_handler)
