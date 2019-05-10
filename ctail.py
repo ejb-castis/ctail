@@ -26,7 +26,7 @@ Colors = {
     "number": '\033[0;38;05;141m',
     "keyword": '\033[0;38;05;208m',
     "variable": '\033[0;38;05;187m',
-    "value": '\033[0;38;05;208m',
+    "value": '\033[0;33m',
     "blue":     '\033[0;38;05;081m',
     "pink":     '\033[1;38;05;161m',
     "pinkbold": '\033[1;38;05;161m',
@@ -114,7 +114,7 @@ def format_eventlog(log):
     event = Colors['green'] + event + Colors['endc']
     desc = re.sub("\[([^](]*)\]", "[" + Colors['keyword'] +
                   r"\1" + Colors['endc'] + "]", desc)
-    desc = re.sub("\(([^)]*)\)", "(" + Colors['purple'] +
+    desc = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
                   r"\1" + Colors['endc'] + ")" , desc)
     return '%s %s %s %s' % (datetime, event, level, desc), False
 
@@ -141,7 +141,7 @@ def format_cilog(log):
     code = Colors['code'] + code + Colors['endc']
     description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
                          r"\1" + Colors['endc'] + Colors['description'] + "]", description)
-    description = re.sub("\(([^)]*)\)", "(" + Colors['purple'] +
+    description = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
                          r"\1" + Colors['endc'] + Colors['description'] + ")", description)
     description = Colors['description'] + description + Colors['endc']
     return ','.join([name, id, date, time, level, section, code, description]), False
@@ -188,7 +188,6 @@ def open_head(filename, offset):
         if _verbose:
             print colorize_ok('>>> Error :%s' % filename),
             print e
-        f.close()
         return None, True
 
     _last_target_filename = filename
@@ -212,14 +211,12 @@ def open_tail(filename):
         if _verbose:
             print colorize_ok('>>> Error :%s' % filename),
             print e
-        f.close()
         return None, True
 
     _last_target_filename = filename
     return f, False
 
 def get_tail_filename(filename, follow_file):
-    
     if follow_file:
         if not exist_file(filename): 
             if _verbose: print colorize_ok('>>> Not found :%s' % filename)
