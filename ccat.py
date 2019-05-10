@@ -105,6 +105,7 @@ def translate(log):
     return ','.join([event, level, datetime, desc])
 
 def format_eventlog(log):
+    global _disableColoring
     global _begin_time, _end_time
     try:
         event, level, datetime, desc = log.split(',', 3)
@@ -121,21 +122,29 @@ def format_eventlog(log):
 
     except Exception as e:
         return log, True
-    if level in ['error', 'fail', 'warning', 'except']:
-        level = Colors['pinkbold'] + level + Colors['endc']
+
+    if _disableColoring:
+      return '%s %s %s %s' % (datetime, event, level, desc), False
     else:
-        level = Colors['blue'] + level + Colors['endc']
-    event = Colors['green'] + event + Colors['endc']
-    desc = re.sub("\[([^](]*)\]", "[" + Colors['keyword'] +
-                  r"\1" + Colors['endc'] + "]", desc)
-    desc = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
-                  r"\1" + Colors['endc'] + ")" , desc)
-    return '%s %s %s %s' % (datetime, event, level, desc), False
+      if level in ['error', 'fail', 'warning', 'except']:
+          level = Colors['pinkbold'] + level + Colors['endc']
+      else:
+          level = Colors['blue'] + level + Colors['endc']
+      event = Colors['green'] + event + Colors['endc']
+      desc = re.sub("\[([^](]*)\]", "[" + Colors['keyword'] +
+                    r"\1" + Colors['endc'] + "]", desc)
+      desc = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
+                    r"\1" + Colors['endc'] + ")" , desc)
+      return '%s %s %s %s' % (datetime, event, level, desc), False
 
 def colorize_ok(str):
+    global _disableColoring
+    if _disableColoring: 
+      return str
     return Colors['ok'] + str + Colors['endc']
 
 def format_cilog(log):
+    global _disableColoring
     try:
         name, id, date, time, level, section, code, description = log.split(
             ',', 7)
@@ -152,24 +161,28 @@ def format_cilog(log):
 
     except Exception as e:
         return log, True
-    name = Colors['name'] + name + Colors['endc']
-    id = Colors['id'] + id + Colors['endc']
-    date = Colors['date'] + date + Colors['endc']
-    time = Colors['time'] + time + Colors['endc']
-    if level in ['Error', 'Fail', 'Warning']:
-        level = Colors['error'] + level + Colors['endc']
+
+    if _disableColoring:
+      return ','.join([name, id, date, time, level, section, code, description]), False
     else:
-        level = Colors['level'] + level + Colors['endc']
-    section = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                     r"\1" + Colors['endc'] + "]", section)
-    section = Colors['section'] + section + Colors['endc']
-    code = Colors['code'] + code + Colors['endc']
-    description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + "]", description)
-    description = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + ")", description)
-    description = Colors['description'] + description + Colors['endc']
-    return ','.join([name, id, date, time, level, section, code, description]), False
+      name = Colors['name'] + name + Colors['endc']
+      id = Colors['id'] + id + Colors['endc']
+      date = Colors['date'] + date + Colors['endc']
+      time = Colors['time'] + time + Colors['endc']
+      if level in ['Error', 'Fail', 'Warning']:
+          level = Colors['error'] + level + Colors['endc']
+      else:
+          level = Colors['level'] + level + Colors['endc']
+      section = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
+                      r"\1" + Colors['endc'] + "]", section)
+      section = Colors['section'] + section + Colors['endc']
+      code = Colors['code'] + code + Colors['endc']
+      description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
+                          r"\1" + Colors['endc'] + Colors['description'] + "]", description)
+      description = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
+                          r"\1" + Colors['endc'] + Colors['description'] + ")", description)
+      description = Colors['description'] + description + Colors['endc']
+      return ','.join([name, id, date, time, level, section, code, description]), False
 
 def print_format_log(log):
     if log.startswith('0x'):
@@ -322,6 +335,7 @@ def usage():
     print 'Options:'
     print '-b             specify log begin datetime : ex) 2019-05-10T12:00:00'
     print '-e             specify log end datetime : ex) 2019-05-10T13:10:00'
+    print '-C             disable coloring'
     print '--version      print version'
     print '-v, --verbose  print messages verbosely'
     print '-V,            print last message only'
@@ -365,10 +379,13 @@ def main():
     global _filenames
     follow_file = True
     bd=''
-    ed=''   
-  
+    ed=''
+
+    global _disableColoring
+    _disableColoring = False
+
     try:
-        options, args = getopt.getopt(sys.argv[1:], "Vvhb:e:", ["help", "version", "verbose"])
+        options, args = getopt.getopt(sys.argv[1:], "CVvhb:e:", ["help", "version", "verbose"])
     except getopt.GetoptError as err:
         print str(err)
         print ""
@@ -381,8 +398,10 @@ def main():
             sys.exit(1)
         if op == "-v" or op == "--verbose":
             _verbose = True
+        if op == "-C":
+            _disableColoring = True
         if op == "-V":
-            _verboseLast = True            
+            _verboseLast = True
         if op == "-b":
             bd = p
         if op == "-e":
