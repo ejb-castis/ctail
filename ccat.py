@@ -11,6 +11,8 @@ import sys
 import re
 import fileinput
 import getopt
+import datetime
+from dateutil.parser import parse
 
 Colors = {
     "name": '\033[0m',
@@ -103,8 +105,20 @@ def translate(log):
     return ','.join([event, level, datetime, desc])
 
 def format_eventlog(log):
+    global _begin_time, _end_time
     try:
         event, level, datetime, desc = log.split(',', 3)
+
+        logtime, error = convert_datetime(datetime, False)
+        if error: pass
+        else : 
+          if _begin_time : 
+            if _begin_time <= logtime : pass
+            else : return '', False
+          if _end_time : 
+            if logtime < _end_time : pass
+            else : return '', False
+
     except Exception as e:
         return log, True
     if level in ['error', 'fail', 'warning', 'except']:
@@ -125,6 +139,17 @@ def format_cilog(log):
     try:
         name, id, date, time, level, section, code, description = log.split(
             ',', 7)
+
+        logtime, error = convert_datetime(date + "T" + time, False)
+        if error: pass
+        else : 
+          if _begin_time : 
+            if _begin_time <= logtime : pass
+            else : return '', False
+          if _end_time : 
+            if logtime < _end_time : pass
+            else : return '', False
+
     except Exception as e:
         return log, True
     name = Colors['name'] + name + Colors['endc']
@@ -176,30 +201,17 @@ def cat():
         print_format_log(line)
         sys.stdout.softspace = 0
 
-def open_head(filename, offset):
-    global _last_target_filename
-    try:
-        f = open(filename)
-        if _verbose and _last_target_filename != filename: 
-            print colorize_ok('>>> Open :%s' % filename),
-            print ", offset:" , offset
-        f.seek(offset, 0)
-    except Exception as e:
-        if _verbose:
-            print colorize_ok('>>> Error :%s' % filename),
-            print e
-        return None, True
-    _last_target_filename = filename
-    return f, False
-
 def open_ccat(filename):
     global _last_target_filename
+    global _begin_time, _end_time
     try:
         f = open(filename)
         size = os.path.getsize(filename)
         if _verbose and _last_target_filename != filename: 
             print colorize_ok('>>> Open :%s' % filename),
-            print colorize_ok(', size :%s' % size)
+            if _begin_time or _end_time: print colorize_ok(', size :%s' % size),
+            else : print colorize_ok(', size :%s' % size)
+            print_time()
     except Exception as e:
         if _verbose:
             print colorize_ok('>>> Error :%s' % filename),
@@ -228,7 +240,7 @@ def get_target_filename(filename, follow_file):
             return None, False   
     return target_file, True
 
-def ccat_lines(f):
+def ccat_lines(f):    
     while True:
         try:
             line = f.readline()
@@ -256,12 +268,37 @@ def get_offset(filename):
     except Exception as e:
         return 0, False
 
+def print_time():
+    global _begin_time, _end_time
+    if _begin_time or _end_time:
+      print colorize_ok(">>>"),
+      if _begin_time and _end_time: 
+        print colorize_ok("begin time :%s" % _begin_time), 
+        print colorize_ok(", end time :%s" % _end_time)
+      elif _begin_time: print colorize_ok("begin time :%s" % _begin_time)
+      elif _end_time : print colorize_ok("end time :%s" % _end_time)
+
 def print_last_open_files():
-    if _verbose: 
+    global _filenames, _fileoffset_repository, _last_target_filename
+    if _verbose or _verboseLast:
+        print colorize_ok(">>> Open files :%s" % _filenames)
+        print colorize_ok(">>> Actural Open files :{"),
+        actualfiles = []
+        actualfile_offsets = []
+        for fn in _filenames:
+          offset, exist = get_offset(fn)
+          if exist : 
+            actualfiles.append(fn)
+            actualfile_offsets.append(offset)
+        for i, afn in enumerate(actualfiles):
+          if i == len(actualfiles)-1 :
+            print colorize_ok("'%s': %d" % (afn, actualfile_offsets[i])) ,
+          else: print colorize_ok("'%s': %d," % (afn, actualfile_offsets[i])),
+        print colorize_ok("}"),
         offset, exist = get_offset(_last_target_filename)
-        print colorize_ok("\n>>> Open files :%s" % _fileoffset_repository),
         print colorize_ok("\n>>> Last Open :%s" % _last_target_filename), 
         print colorize_ok(", offset :%s" % offset)
+        print_time()
 
 def ccat(filename, follow_file):
     target, exist = get_target_filename(filename, follow_file)
@@ -283,13 +320,30 @@ def usage():
     print ''
     print 'Catenates file or files'
     print 'Options:'
+    print '-b             specify log begin datetime : ex) 2019-05-10T12:00:00'
+    print '-e             specify log end datetime : ex) 2019-05-10T13:10:00'
     print '--version      print version'
     print '-v, --verbose  print messages verbosely'
+    print '-V,            print last message only'
 
 def print_version():
     print '0.1.0'
 
+def convert_datetime(dt, print_error):
+  try:
+    d_t = parse(dt)
+  except Exception as e:
+    if print_error:
+      print colorize_ok('>>> Error : datetime option'),
+      print colorize_ok(str(e))
+    return None, True
+  return d_t, False
+
 def main():
+    global _begin_time, _end_time
+    _begin_time = ''
+    _end_time= ''
+
     signal.signal(signal.SIGINT, sig_handler)
     if len(sys.argv) == 1 and not sys.stdin.isatty():
         cat()
@@ -298,8 +352,9 @@ def main():
         usage()
         sys.exit(1)
 
-    global _verbose
+    global _verbose, _verboseLast
     _verbose = False
+    _verboseLast = False
 
     global _fileoffset_repository
     _fileoffset_repository = {}
@@ -307,10 +362,13 @@ def main():
     global _last_target_filename
     _last_target_filename = ""
 
+    global _filenames
     follow_file = True
-
+    bd=''
+    ed=''   
+  
     try:
-        options, args = getopt.getopt(sys.argv[1:], "vhb:e:", ["help", "version", "verbose"])
+        options, args = getopt.getopt(sys.argv[1:], "Vvhb:e:", ["help", "version", "verbose"])
     except getopt.GetoptError as err:
         print str(err)
         print ""
@@ -323,26 +381,37 @@ def main():
             sys.exit(1)
         if op == "-v" or op == "--verbose":
             _verbose = True
+        if op == "-V":
+            _verboseLast = True            
         if op == "-b":
-            _begin_date = p
+            bd = p
         if op == "-e":
-            _end_date = p
+            ed = p
         if op == "-h" or op == "--help":
             usage()
             sys.exit(1)
 
+    error = False
+    if bd : _begin_time, error = convert_datetime(bd, True)
+    if error : sys.exit(1)
+    if ed : _end_time, error = convert_datetime(ed, True)
+    if error : sys.exit(1)
+    if _begin_time and _end_time : 
+      if _begin_time >= _end_time :
+        print colorize_ok('>>> Error : datetime option : should be begin time < end time'),
+        sys.exit(1)
+
     if len(args) > 0:
-        filenames = args
+        _filenames = args
         if _verbose:
-          print colorize_ok(">>> Open files :%s" % filenames)
-          if _verbose:
-            print colorize_ok(">>> b :%s" % _begin_date),
-            print colorize_ok(">>> e :%s" % _end_date)
+          print colorize_ok(">>> Open files :%s" % _filenames)
+          print_time()
+
     else:
         usage()
         sys.exit(1)
 
-    for filename in filenames:
+    for filename in _filenames:
       ccat(filename, follow_file)
 
     print_last_open_files()      

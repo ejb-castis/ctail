@@ -45,12 +45,14 @@ $ cat EventLog.log | ctail
 - cilog 포멧에 대한 하이라이트
 - eventlog 포멧에 대한 하이라이트
 - 괄호 내 단어들에 대한 하이라이트
+- logdatetime 필터링
 - stdin pipe 지원
 
 ## 사용 예
 ```bash
 
-# cat 
+# ccat 
+
 $ ccat -v test/test* 
 >>> Open files :['test/test1.log', 'test/test2.log', 'test/test3.log', 'test/test4.log', 'test/test5.log', 'test/test6.log']
 >>> Open :test/test1.log , size :120
@@ -68,10 +70,29 @@ $ ccat -v test/test*
 2018-10-26 16:38:03 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
 >>> Open :test/test6.log , size :91
 2018-10-26 16:38:07 Global none SCP-Client : IsServerAlive RECOVERY (OnObjectServerResponse)!! -> -1
-
 >>> Open files :{'test/test5.log': 225, 'test/test1.log': 120, 'test/test6.log': 91, 'test/test2.log': 75, 'test/test4.log': 75, 'test/test3.log': 75} 
 >>> Last Open :test/test6.log , offset :91
 
+# ccat -b, -e option
+
+$ ccat -V -b 2018-10-26T16:37:45 -e 2018-10-26T16:38 test/test1.log test/t1.log test/test2.log
+
+2018-10-26 16:37:45 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:37:48 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+>>> Open files :['test/test1.log', 'test/t1.log', 'test/test2.log']
+>>> Actural Open files :{ 'test/test1.log': 120, 'test/test2.log': 75 } 
+>>> Last Open :test/test2.log , offset :75
+>>> begin time :2018-10-26 16:37:45 , end time :2018-10-26 16:38:00
+
 # pipe
-$ cat EventLog.log | ccat
+$ cat test/test* | ccat          
+2018-10-26 16:37:42 Global none LoadBalancer2 STARTED!
+2018-10-26 16:37:45 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:37:48 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:37:51 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:37:54 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:37:57 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:38:00 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:38:03 Global debug Ping-Client : IsServerAlive ERROR!! -> -1, 127.0.0.1
+2018-10-26 16:38:07 Global none SCP-Client : IsServerAlive RECOVERY (OnObjectServerResponse)!! -> -1
 ```
