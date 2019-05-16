@@ -107,6 +107,7 @@ def translate(log):
 def format_eventlog(log):
     global _disableColoring
     global _begin_time, _end_time
+    global _filename_searching_only
     try:
         event, level, datetime, desc = log.split(',', 3)
 
@@ -115,16 +116,18 @@ def format_eventlog(log):
         else : 
           if _begin_time : 
             if _begin_time <= logtime : pass
-            else : return '', False
+            else : return False, '', False
           if _end_time : 
             if logtime < _end_time : pass
-            else : return '', False
+            else : return False, '', False
 
     except Exception as e:
-        return log, True
+        return False, log, True
 
+    if _filename_searching_only:
+      return True, '', False
     if _disableColoring:
-      return '%s %s %s %s' % (datetime, event, level, desc), False
+      return True, '%s %s %s %s' % (datetime, event, level, desc), False
     else:
       if level in ['error', 'fail', 'warning', 'except']:
           level = Colors['pinkbold'] + level + Colors['endc']
@@ -135,16 +138,18 @@ def format_eventlog(log):
                     r"\1" + Colors['endc'] + "]", desc)
       desc = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
                     r"\1" + Colors['endc'] + ")" , desc)
-      return '%s %s %s %s' % (datetime, event, level, desc), False
+      return True, '%s %s %s %s' % (datetime, event, level, desc), False
 
 def colorize_ok(str):
-    global _disableColoring
+    global _disableColoring    
     if _disableColoring: 
       return str
     return Colors['ok'] + str + Colors['endc']
 
 def format_cilog(log):
     global _disableColoring
+    global _begin_time, _end_time
+    global _filename_searching_only
     try:
         name, id, date, time, level, section, code, description = log.split(
             ',', 7)
@@ -154,16 +159,17 @@ def format_cilog(log):
         else : 
           if _begin_time : 
             if _begin_time <= logtime : pass
-            else : return '', False
+            else : return False, '', False
           if _end_time : 
             if logtime < _end_time : pass
-            else : return '', False
+            else : return False, '', False
 
     except Exception as e:
-        return log, True
-
+        return False, log, True
+    if _filename_searching_only:
+      return True, '', False
     if _disableColoring:
-      return ','.join([name, id, date, time, level, section, code, description]), False
+      return True, ','.join([name, id, date, time, level, section, code, description]), False
     else:
       name = Colors['name'] + name + Colors['endc']
       id = Colors['id'] + id + Colors['endc']
@@ -182,14 +188,15 @@ def format_cilog(log):
       description = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
                           r"\1" + Colors['endc'] + Colors['description'] + ")", description)
       description = Colors['description'] + description + Colors['endc']
-      return ','.join([name, id, date, time, level, section, code, description]), False
+      return True, ','.join([name, id, date, time, level, section, code, description]), False
 
 def print_format_log(log):
     if log.startswith('0x'):
-        log, error = format_eventlog(translate(log))
+        exist, log, error = format_eventlog(translate(log))
     else:
-        log, error = format_cilog(log)
+        exist, log, error = format_cilog(log)    
     print log,
+    return exist
 
 def newest_file_in(path):
     def mtime(f): return os.stat(os.path.join(path, f)).st_mtime
@@ -253,7 +260,9 @@ def get_target_filename(filename, follow_file):
             return None, False   
     return target_file, True
 
-def ccat_lines(f):    
+def ccat_lines(f):
+    global _filename_searching_only
+    exist = False
     while True:
         try:
             line = f.readline()
@@ -262,12 +271,26 @@ def ccat_lines(f):
             f.close()
             return 0, True
         if line: 
-            print_format_log(line)
+            exist = print_format_log(line)
             sys.stdout.softspace=0
+            if _filename_searching_only: 
+              if exist: break
         else: break
     offset = f.tell()
     f.close()
-    return offset, False
+    return exist, offset, False
+
+def put_filenmae_searcing_offset(filename, offset):
+    global _filenmae_searcing_fileoffset_repository
+    _filenmae_searcing_fileoffset_repository[filename] = offset
+
+def get_filenmae_searcing_offset(filename):
+    global _filenmae_searcing_fileoffset_repository
+    try:
+        offset = _filenmae_searcing_fileoffset_repository[filename]
+        return offset, True
+    except Exception as e:
+        return 0, False
 
 def put_offset(filename, offset):
     global _fileoffset_repository
@@ -292,7 +315,7 @@ def print_time():
       elif _end_time : print colorize_ok("end time :%s" % _end_time)
 
 def print_last_open_files():
-    global _filenames, _fileoffset_repository, _last_target_filename
+    global _filenames, _last_target_filename
     if _verbose or _verboseLast:
         print colorize_ok(">>> Open files :%s" % _filenames)
         print colorize_ok(">>> Actural Open files :{"),
@@ -313,15 +336,32 @@ def print_last_open_files():
         print colorize_ok(", offset :%s" % offset)
         print_time()
 
+def print_searching_files():
+    global _filenames
+    global _filename_searching_only
+    print colorize_ok(">>> Result files :")
+    actualfiles = []
+    actualfile_offsets = []
+    for fn in _filenames:
+      offset, exist = get_filenmae_searcing_offset(fn)
+      if exist : 
+        actualfiles.append(fn)
+        actualfile_offsets.append(offset)
+    for i, afn in enumerate(actualfiles):
+      print colorize_ok("'%s': %d" % (afn, actualfile_offsets[i]))
+
 def ccat(filename, follow_file):
+    global _filename_searching_only
     target, exist = get_target_filename(filename, follow_file)
     if not exist: return
 
     f, error = open_ccat(target)
     if error: return
 
-    offset, error = ccat_lines(f)
+    fsexist, offset, error = ccat_lines(f)
     if error: return
+    if _filename_searching_only:
+      if fsexist: put_filenmae_searcing_offset(target, offset)                    
     put_offset(target, offset)
 
 def sig_handler(signal, frame):
@@ -335,13 +375,14 @@ def usage():
     print 'Options:'
     print '-b             specify log begin datetime : ex) 2019-05-10T12:00:00'
     print '-e             specify log end datetime : ex) 2019-05-10T13:10:00'
+    print '-n             print filename only after datetime searching'
     print '-C             disable coloring'
     print '--version      print version'
     print '-v, --verbose  print messages verbosely'
     print '-V,            print last message only'
 
 def print_version():
-    print '0.1.0'
+    print '0.1.1'
 
 def convert_datetime(dt, print_error):
   try:
@@ -357,6 +398,12 @@ def main():
     global _begin_time, _end_time
     _begin_time = ''
     _end_time= ''
+
+    global _disableColoring
+    _disableColoring = False
+
+    global _filename_searching_only
+    _filename_searching_only = False
 
     signal.signal(signal.SIGINT, sig_handler)
     if len(sys.argv) == 1 and not sys.stdin.isatty():
@@ -380,12 +427,12 @@ def main():
     follow_file = True
     bd=''
     ed=''
-
-    global _disableColoring
-    _disableColoring = False
+    
+    global _filenmae_searcing_fileoffset_repository
+    _filenmae_searcing_fileoffset_repository = {}
 
     try:
-        options, args = getopt.getopt(sys.argv[1:], "CVvhb:e:", ["help", "version", "verbose"])
+        options, args = getopt.getopt(sys.argv[1:], "nCVvhb:e:", ["help", "version", "verbose"])
     except getopt.GetoptError as err:
         print str(err)
         print ""
@@ -398,6 +445,8 @@ def main():
             sys.exit(1)
         if op == "-v" or op == "--verbose":
             _verbose = True
+        if op == "-n":
+            _filename_searching_only = True
         if op == "-C":
             _disableColoring = True
         if op == "-V":
@@ -433,7 +482,12 @@ def main():
     for filename in _filenames:
       ccat(filename, follow_file)
 
-    print_last_open_files()      
+    if _filename_searching_only:
+      print_time()
+      print_searching_files()
+      
+
+    print_last_open_files()
 
 if __name__ == '__main__':
     main()
