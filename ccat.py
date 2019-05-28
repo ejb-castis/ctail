@@ -375,14 +375,14 @@ def usage():
     print 'Options:'
     print '-b             specify log begin datetime : ex) 2019-05-10T12:00:00'
     print '-e             specify log end datetime : ex) 2019-05-10T13:10:00'
-    print '-n             print filename only after datetime searching'
+    print '-t             print filename only after datetime searching'
     print '-C             disable coloring'
     print '--version      print version'
     print '-v, --verbose  print messages verbosely'
     print '-V,            print last message only'
 
 def print_version():
-    print '0.1.1'
+    print '0.1.2'
 
 def convert_datetime(dt, print_error):
   try:
@@ -432,7 +432,7 @@ def main():
     _filenmae_searcing_fileoffset_repository = {}
 
     try:
-        options, args = getopt.getopt(sys.argv[1:], "nCVvhb:e:", ["help", "version", "verbose"])
+        options, args = getopt.getopt(sys.argv[1:], "tCVvhb:e:", ["help", "version", "verbose"])
     except getopt.GetoptError as err:
         print str(err)
         print ""
@@ -445,7 +445,7 @@ def main():
             sys.exit(1)
         if op == "-v" or op == "--verbose":
             _verbose = True
-        if op == "-n":
+        if op == "-t":
             _filename_searching_only = True
         if op == "-C":
             _disableColoring = True
