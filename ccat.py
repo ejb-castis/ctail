@@ -198,7 +198,7 @@ def format_ncsacombinedlog(log):
       host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
 
       empty, logdatetime = datetime.split('[', 1)
-      logtime, error = convert_datetime(logdatetime, True, True)      
+      logtime, error = convert_datetime(logdatetime, True, False)
       if error: pass
       else : 
         if _begin_time : 
@@ -231,7 +231,7 @@ def format_ncsalog(log):
       host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
       
       empty, logdatetime = datetime.split('[', 1)
-      logtime, error = convert_datetime(logdatetime, True, True)      
+      logtime, error = convert_datetime(logdatetime, True, False)
       if error: pass
       else : 
         if _begin_time : 
