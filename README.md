@@ -11,6 +11,7 @@
 - stdin pipe 지원
 - 지정한 파일만 tail하는 기능
 - tail 하고 있던 파일에 대한 retry 기능
+- ncsa combined log format 하이라이트
 
 ## 설치
 
@@ -47,6 +48,7 @@ $ cat EventLog.log | ctail
 - 괄호 내 단어들에 대한 하이라이트
 - logdatetime 필터링
 - stdin pipe 지원
+- ncsa combined log format 하이라이트
 
 ## 사용 예
 ```bash

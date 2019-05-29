@@ -1,4 +1,18 @@
-# 2019-05-16
+# 2019-05-29
+cctail:
+[버전 변경]
+0.1.2 -> 0.1.3
+[기능 추가]
+ncsa combined log format 하이라이트 추가
+
+ccat:
+[버전 추가]
+0.1.2 -> 0.1.3
+[기능 변경]
+ncsa combined log format 하이라이트 추가
+ncsa combined log format logdatetime 필터링
+
+# 2019-05-28
 ccat:
 [버전 변경]
 0.1.1 -> 0.1.2

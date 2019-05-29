@@ -111,7 +111,7 @@ def format_eventlog(log):
     try:
         event, level, datetime, desc = log.split(',', 3)
 
-        logtime, error = convert_datetime(datetime, False)
+        logtime, error = convert_datetime(datetime, False, False)
         if error: pass
         else : 
           if _begin_time : 
@@ -154,7 +154,7 @@ def format_cilog(log):
         name, id, date, time, level, section, code, description = log.split(
             ',', 7)
 
-        logtime, error = convert_datetime(date + "T" + time, False)
+        logtime, error = convert_datetime(date + "T" + time, False, False)
         if error: pass
         else : 
           if _begin_time : 
@@ -190,11 +190,82 @@ def format_cilog(log):
       description = Colors['description'] + description + Colors['endc']
       return True, ','.join([name, id, date, time, level, section, code, description]), False
 
+def format_ncsacombinedlog(log):
+    global _disableColoring
+    global _begin_time, _end_time
+    global _filename_searching_only
+    try:
+      host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
+
+      empty, logdatetime = datetime.split('[', 1)
+      logtime, error = convert_datetime(logdatetime, True, True)      
+      if error: pass
+      else : 
+        if _begin_time : 
+          if _begin_time <= logtime : pass
+          else : return False, '', False
+        if _end_time : 
+          if logtime < _end_time : pass
+          else : return False, '', False
+
+    except Exception as e:
+      return False, log, True
+
+    if _filename_searching_only:
+      return True, '', False
+    if _disableColoring:
+      return True, ' '.join([host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined]), False
+    else:
+      datetimetz = datetime + " " + tz
+      datetimetz = Colors['date'] + datetimetz + Colors['endc']
+      request = method + " " + uri + " " + version
+      request = Colors['green'] + request + Colors['endc']
+      statuscode = Colors['blue'] + statuscode + Colors['endc']
+      return True, '%s %s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes, combined), False
+
+def format_ncsalog(log):
+    global _disableColoring
+    global _begin_time, _end_time
+    global _filename_searching_only
+    try:
+      host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
+      
+      empty, logdatetime = datetime.split('[', 1)
+      logtime, error = convert_datetime(logdatetime, True, True)      
+      if error: pass
+      else : 
+        if _begin_time : 
+          if _begin_time <= logtime : pass
+          else : return False, '', False
+        if _end_time : 
+          if logtime < _end_time : pass
+          else : return False, '', False
+
+    except Exception as e:
+      return False, log, True
+
+    if _filename_searching_only:
+      return True, '', False
+    if _disableColoring:
+      return True, ' '.join([host, id, username, datetime, tz, method, uri, version, statuscode, bytes]), False
+    else:
+      datetimetz = datetime + " " + tz
+      datetimetz = Colors['date'] + datetimetz + Colors['endc']
+      request = method + " " + uri + " " + version
+      request = Colors['green'] + request + Colors['endc']
+      statuscode = Colors['blue'] + statuscode + Colors['endc']
+      return True, '%s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes), False
+
 def print_format_log(log):
     if log.startswith('0x'):
         exist, log, error = format_eventlog(translate(log))
     else:
-        exist, log, error = format_cilog(log)    
+        exist, log, error = format_cilog(log)
+        if error:
+          exist, log, error = format_ncsacombinedlog(log)
+          if error:
+            exist, log, error = format_ncsalog(log)
+
     print log,
     return exist
 
@@ -384,9 +455,12 @@ def usage():
 def print_version():
     print '0.1.2'
 
-def convert_datetime(dt, print_error):
+def convert_datetime(dt, fuzzy, print_error):
   try:
-    d_t = parse(dt)
+    if fuzzy:
+      d_t = parse(dt, fuzzy=True)
+    else :
+      d_t = parse(dt)
   except Exception as e:
     if print_error:
       print colorize_ok('>>> Error : datetime option'),
@@ -460,9 +534,9 @@ def main():
             sys.exit(1)
 
     error = False
-    if bd : _begin_time, error = convert_datetime(bd, True)
+    if bd : _begin_time, error = convert_datetime(bd, False, True)
     if error : sys.exit(1)
-    if ed : _end_time, error = convert_datetime(ed, True)
+    if ed : _end_time, error = convert_datetime(ed, False, True)
     if error : sys.exit(1)
     if _begin_time and _end_time : 
       if _begin_time >= _end_time :

@@ -146,11 +146,40 @@ def format_cilog(log):
     description = Colors['description'] + description + Colors['endc']
     return ','.join([name, id, date, time, level, section, code, description]), False
 
+def format_ncsacombinedlog(log):
+    try:
+      host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
+    except Exception as e:
+      return log, True
+    datetimetz = datetime + " " + tz
+    datetimetz = Colors['date'] + datetimetz + Colors['endc']
+    request = method + " " + uri + " " + version
+    request = Colors['green'] + request + Colors['endc']
+    statuscode = Colors['blue'] + statuscode + Colors['endc']
+    return '%s %s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes, combined), False
+
+def format_ncsalog(log):
+    try:
+      host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
+    except Exception as e:
+      return log, True
+    datetimetz = datetime + " " + tz
+    datetimetz = Colors['date'] + datetimetz + Colors['endc']
+    request = method + " " + uri + " " + version
+    request = Colors['green'] + request + Colors['endc']
+    statuscode = Colors['blue'] + statuscode + Colors['endc']
+    return '%s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes), False
+
 def print_format_log(log):
     if log.startswith('0x'):
         log, error = format_eventlog(translate(log))
     else:
         log, error = format_cilog(log)
+        if error:
+          log, error = format_ncsacombinedlog(log)
+          if error:
+            log, error = format_ncsalog(log)
+
     print log,
 
 def newest_file_in(path):
@@ -337,7 +366,7 @@ def usage():
     print '-v, --verbose  print messages verbosely'
 
 def print_version():
-    print '0.1.2'
+    print '0.1.3'
 
 def main():
     signal.signal(signal.SIGINT, sig_handler)
