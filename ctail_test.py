@@ -4,7 +4,7 @@
 import os
 import time
 import unittest
-import jtail as ctail
+import ctail as ctail
 
 class CtailTests(unittest.TestCase):
     def setUp(self):
