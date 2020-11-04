@@ -453,7 +453,6 @@ def tail(filename, follow_file):
 
 
 def sig_handler(signal, frame):
-    global _last_target_filename
     if _verbose:
         offset, exist = get_offset(_last_target_filename)
         print (colorize_ok("\n>>> Open files :{}".format(_fileoffset_repository)))
