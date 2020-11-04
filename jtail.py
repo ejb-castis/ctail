@@ -348,7 +348,7 @@ def get_tail_filename(filename, follow_file):
             return None, False
     return tail_file, True
 
-
+# -> (offset, error)
 def keep_tail(f):
     while True:
         try:
@@ -380,7 +380,7 @@ def get_offset(filename):
     except Exception as e:
         return 0, False
 
-
+# -> (fd, error)
 def open_tail(filename, offset=0):
     try:
         f = open(filename)
@@ -399,8 +399,8 @@ def open_tail(filename, offset=0):
         if offset > 0:
           f.seek(offset, 0)
         else:
-          if size >= 2048:
-            f.seek(size - 2048, 0)
+          if size > 2048:
+            f.seek(size - 2048 - 1, 0)
             f.readline()
     except Exception as e:
         f.close()
@@ -441,6 +441,7 @@ def tail(filename, follow_file):
           else:
             put_offset(target, offset)
             f.close()
+
             target = new_target
             offset, exist = get_offset(target)
             f, error = open_tail(target, offset)
