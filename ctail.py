@@ -308,19 +308,37 @@ def get_path_of(filename):
 
 
 def exist_file(filename):
-    return os.path.isfile(filename) or os.path.islink(filename)
+    return os.path.exists(filename) and os.path.isfile(filename)
+
 
 def exist_directory(directory):
     return os.path.exists(directory)
 
-def get_original_file(filename):
-  if os.path.isfile(filename):
-    return filename
-  else:
-    if os.path.islink(filename):
-      original =os.readlink(filename)
 
-    return os.path.isfile(filename) or os.path.islink(filename)
+def get_original_file(file):
+    print("{}, exists:{}, isfile:{}, isdir:{}, islink:{}".format(file, os.path.exists(
+        file), os.path.isfile(file), os.path.isdir(file), os.path.islink(file)))
+
+    if os.path.islink(file):
+        original = os.readlink(file)
+        #original = os.path.join(get_path_of(original), original)
+        print("link:{} points to:{}".format(file, original))
+        #return get_original_file(original)
+
+        print("original:{}, exists:{}, isfile:{}, isdir:{}, islink:{}".format(original, os.path.exists(
+        original), os.path.isfile(original), os.path.isdir(original), os.path.islink(original)))
+
+
+    else:
+        print("not a link:{}".format(file))
+        if os.path.isfile(file):
+            print("file:{}".format(file))
+            return file
+        else:
+            print("not a file:{}".format(file))
+
+    return None
+
 
 def cat():
     for line in fileinput.input("-"):
@@ -427,11 +445,11 @@ def tail(filename, follow_file):
     if not exist:
         return
     try:
-      if os.path.islink(target):
-        original_target = os.readlink(target)
-        print("open link, {} is point to {}".format(target, original_target))
+        if os.path.islink(target):
+            original_target = get_original_file(target)
+            print("open link, {} is point to {}".format(target, original_target))
     except:
-      return
+        return
 
     f, error = open_tail(target)
     if error:
@@ -444,27 +462,28 @@ def tail(filename, follow_file):
             put_offset(target, 0)
             return
 
-        if follow_file :
+        if follow_file:
             try:
-              if os.path.islink(target):
-                new_original_target = os.readlink(target)
-                if original_target != new_original_target:
-                  print("follow link, {} chagned point to {}".format(target, new_original_target))
-                  put_offset(original_target, offset)
-                  f.close()
+                if os.path.islink(target):
+                    new_original_target = os.get_original_file(target)
+                    if original_target != new_original_target:
+                        print("follow link, {} chagned point to {}".format(
+                            target, new_original_target))
+                        put_offset(original_target, offset)
+                        f.close()
 
-                  original_target = new_original_target
-                  offset, exist = get_offset(original_target)
-                  f, error = open_tail(target, offset)
-                  if error:
-                      return
-                  _last_target_filename = target
-              else:
-                time.sleep(0.1)
-                continue
+                        original_target = new_original_target
+                        offset, exist = get_offset(original_target)
+                        f, error = open_tail(target, offset)
+                        if error:
+                            return
+                        _last_target_filename = target
+                else:
+                    time.sleep(0.1)
+                    continue
             except:
-              put_offset(target, 0)
-              return
+                put_offset(target, 0)
+                return
 
             time.sleep(0.1)
             continue
