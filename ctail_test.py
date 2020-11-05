@@ -6,6 +6,7 @@ import time
 import unittest
 import ctail as ctail
 
+
 class CtailTests(unittest.TestCase):
     def setUp(self):
         self.dir = "unittest/test"
@@ -13,6 +14,9 @@ class CtailTests(unittest.TestCase):
         self.file_path = self.dir + "/" + self.file_name
         self.another_file_name = "another.test.txt"
         self.another_file_path = self.dir + "/" + self.another_file_name
+        self.soft_link_file_name = "softlink.txt"
+        self.soft_link_file_path = self.dir + "/" + self.soft_link_file_name
+
         try:
             exist = os.path.exists(self.dir)
             if exist == False:
@@ -23,11 +27,14 @@ class CtailTests(unittest.TestCase):
             print ("made dir : {}".format(self.dir))
 
     def tearDown(self):
-        if os.path.isfile(self.file_path):
-          os.remove(self.file_path)
-        if os.path.isfile(self.another_file_path):
-          os.remove(self.another_file_path)
-        os.removedirs(self.dir)
+        # if os.path.isfile(self.file_path):
+        #     os.remove(self.file_path)
+        # if os.path.isfile(self.another_file_path):
+        #     os.remove(self.another_file_path)
+        # if os.path.islink(self.soft_link_file_path):
+        #     os.remove(self.soft_link_file_path)
+        # os.removedirs(self.dir)
+
         print ("removed dir : {}".format(self.dir))
         pass
 
@@ -78,6 +85,14 @@ class CtailTests(unittest.TestCase):
         try:
             if os.path.isfile(self.another_file_path):
                 os.remove(self.another_file_path)
+        except OSError as e:
+            pass
+
+    def linkFile(self, original):
+        try:
+            if os.path.islink(self.soft_link_file_path):
+                os.remove(self.soft_link_file_path)
+            os.symlink(original, self.soft_link_file_path)
         except OSError as e:
             pass
 
@@ -430,6 +445,61 @@ class CtailTests(unittest.TestCase):
             #print("tail, file path:{}, offset:{}, error:{}".format(target, offset, error))
             self.assertEqual(False, error)
             self.assertEqual(8, offset)
+
+        except Exception as e:
+            self.assertTrue(False, "error, {}".format(e))
+        finally:
+            if f is not None:
+                f.close()
+
+    # -f option, soft link file 의 original file이 변할 때 test
+    def test_soft_link_change_point_with_option_f(self):
+        self.newFile(1)
+        f = None
+        try:
+            self.linkFile(self.file_name)
+            original_path = os.readlink(self.soft_link_file_path)
+            print("link:{} to original:{} ".format(self.soft_link_file_path, original_path))
+
+            ctail._verbose = False
+            ctail._follow_file = True
+
+            target, exist = ctail.get_tail_filename(self.soft_link_file_path, True)
+            print("get the newest file path:{} ".format(target))
+            self.assertEqual(True, exist)
+            self.assertEqual(self.soft_link_file_path, target)
+
+            f, error = ctail.open_tail(target)
+            self.assertEqual(False, error)
+
+            offset = f.tell()
+            size = os.path.getsize(target)
+            print("open, file path:{}, size:{}, offset:{}".format(target, size, offset))
+            self.assertEqual(8, size)
+            self.assertEqual(0, offset)
+
+            # 첫 번째 tail
+            offset, error = ctail.keep_tail(f)
+            #print("tail, file path:{}, size:{}, offset:{}".format(target, size, offset))
+            self.assertEqual(False, error)
+            self.assertEqual(8, size)
+            self.assertEqual(8, offset)
+
+            # soft link file의 original 이 바뀌는 경우
+            self.linkFile(self.another_file_name)
+            original_path = os.readlink(self.soft_link_file_path)
+            print("link:{} to original:{} ".format(self.soft_link_file_path, original_path))
+
+            # # file 이 지워져도 f 가 유효한 건지, error가 나지 않음
+            # offset, error = ctail.keep_tail(f)
+            # #print("tail, file path:{}, offset:{}, error:{}".format(target, offset, error))
+            # self.assertEqual(False, error)
+            # self.assertEqual(8, offset)
+
+            # offset, error = ctail.keep_tail(f)
+            # #print("tail, file path:{}, offset:{}, error:{}".format(target, offset, error))
+            # self.assertEqual(False, error)
+            # self.assertEqual(8, offset)
 
         except Exception as e:
             self.assertTrue(False, "error, {}".format(e))
