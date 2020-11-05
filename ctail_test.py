@@ -490,16 +490,7 @@ class CtailTests(unittest.TestCase):
             original_path = os.readlink(self.soft_link_file_path)
             print("link:{} to original:{} ".format(self.soft_link_file_path, original_path))
 
-            # # file 이 지워져도 f 가 유효한 건지, error가 나지 않음
-            # offset, error = ctail.keep_tail(f)
-            # #print("tail, file path:{}, offset:{}, error:{}".format(target, offset, error))
-            # self.assertEqual(False, error)
-            # self.assertEqual(8, offset)
-
-            # offset, error = ctail.keep_tail(f)
-            # #print("tail, file path:{}, offset:{}, error:{}".format(target, offset, error))
-            # self.assertEqual(False, error)
-            # self.assertEqual(8, offset)
+            # NOT IMPLEMENTED
 
         except Exception as e:
             self.assertTrue(False, "error, {}".format(e))
@@ -507,6 +498,10 @@ class CtailTests(unittest.TestCase):
             if f is not None:
                 f.close()
 
+    def test_exist_file_dir_link(self):
+        file = ""
+        print("exists:{}, isfile:{}, isdir:{}, islink:{}".format(os.path.exists(
+        file), os.path.isfile(file), os.path.isdir(file), os.path.islink(file)))
 
 if __name__ == '__main__':
     unittest.main()
