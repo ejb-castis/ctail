@@ -315,28 +315,14 @@ def exist_directory(directory):
     return os.path.exists(directory)
 
 
-def get_original_file(file):
-    print("{}, exists:{}, isfile:{}, isdir:{}, islink:{}".format(file, os.path.exists(
-        file), os.path.isfile(file), os.path.isdir(file), os.path.islink(file)))
-
+def get_original_file_from_link(file):
     if os.path.islink(file):
         original = os.readlink(file)
-        #original = os.path.join(get_path_of(original), original)
-        print("link:{} points to:{}".format(file, original))
-        #return get_original_file(original)
-
-        print("original:{}, exists:{}, isfile:{}, isdir:{}, islink:{}".format(original, os.path.exists(
-        original), os.path.isfile(original), os.path.isdir(original), os.path.islink(original)))
-
-
+        original = os.path.join(get_path_of(file), original)
+        return get_original_file_from_link(original)
     else:
-        print("not a link:{}".format(file))
-        if os.path.isfile(file):
-            print("file:{}".format(file))
+        if os.path.exists(file):
             return file
-        else:
-            print("not a file:{}".format(file))
-
     return None
 
 
@@ -347,33 +333,38 @@ def cat():
 
 
 def get_tail_filename(filename, follow_file):
+    filename = os.path.abspath(filename)
+    tail_file = None
+    original_file = None
     if follow_file:
         if not exist_file(filename):
             if _verbose:
                 print colorize_ok('>>> Not found :%s' % filename)
-            return None, False
+            return None, False, None
         if is_binary(filename):
             if _verbose:
                 print colorize_ok('>>> Not a text file :%s' % filename)
-            return None, False
+            return None, False, None
         tail_file = filename
+        if os.path.islink(tail_file):
+            original_file = get_original_file_from_link(tail_file)
     else:
         try:
             path = get_path_of(filename)
             if not exist_directory(path):
                 if _verbose:
                     print colorize_ok('>>> Not found path :%s' % path)
-                return None, False
+                return None, False, None
             tail_file = newest_file_in(path)
             if tail_file == "":
                 if _verbose:
                     print colorize_ok('>>> Error : No text files in %s' % path)
-                return None, False
+                return None, False, None
         except Exception as e:
             if _verbose:
                 print colorize_ok('>>> Error :%s, %s' % (filename, e))
-            return None, False
-    return tail_file, True
+            return None, False, None
+    return tail_file, True, original_file
 
 
 def keep_tail(f):
@@ -403,12 +394,12 @@ def get_offset(filename):
     global _fileoffset_repository
     try:
         offset = _fileoffset_repository[filename]
-        return offset, True
+        return offset
     except Exception as e:
-        return 0, False
+        return 0
 
 
-def open_tail(filename, offset=0):  # -> (fd, error)
+def open_tail(filename, offset=0):
     try:
         f = open(filename)
     except Exception as e:
@@ -440,16 +431,13 @@ def open_tail(filename, offset=0):  # -> (fd, error)
 
 def tail(filename, follow_file):
     global _last_target_filename
-    original_target = ""
-    target, exist = get_tail_filename(filename, follow_file)
+
+    target, exist, original_target = get_tail_filename(filename, follow_file)
     if not exist:
         return
-    try:
-        if os.path.islink(target):
-            original_target = get_original_file(target)
-            print("open link, {} is point to {}".format(target, original_target))
-    except:
-        return
+
+    print ("link:{},inode:{}".format(os.stat(target).st_nlink,
+    os.stat(target).st_ino))
 
     f, error = open_tail(target)
     if error:
@@ -460,50 +448,47 @@ def tail(filename, follow_file):
         offset, error = keep_tail(f)
         if error:
             put_offset(target, 0)
+            f.close()
             return
 
         if follow_file:
-            try:
-                if os.path.islink(target):
-                    new_original_target = os.get_original_file(target)
-                    if original_target != new_original_target:
-                        print("follow link, {} chagned point to {}".format(
-                            target, new_original_target))
-                        put_offset(original_target, offset)
-                        f.close()
+            print ("link:{},inode:{}".format(os.stat(target).st_nlink,
+            os.stat(target).st_ino))
 
-                        original_target = new_original_target
-                        offset, exist = get_offset(original_target)
-                        f, error = open_tail(target, offset)
-                        if error:
-                            return
-                        _last_target_filename = target
-                else:
-                    time.sleep(0.1)
-                    continue
-            except:
-                put_offset(target, 0)
-                return
+            if original_target is not None:
+                target, exist, new_original_target = get_tail_filename(target, True)
+                if not exist:
+                  put_offset(original_target, offset)
+                  f.close()
+                  return
 
-            time.sleep(0.1)
-            continue
+                if original_target != new_original_target:
+                    put_offset(original_target, offset)
+                    f.close()
 
+                    original_target = new_original_target
+                    offset = get_offset(original_target)
+                    f, error = open_tail(target, offset)
+                    if error:
+                        put_offset(target, 0)
+                        return
         else:
-            new_target, exist = get_tail_filename(filename, False)
+            new_target, exist, original_target = get_tail_filename(
+                filename, False)
             if not exist:
+                put_offset(target, offset)
+                f.close()
                 return
 
-            if target == new_target:
-                time.sleep(0.1)
-                continue
-            else:
+            if target != new_target:
                 put_offset(target, offset)
                 f.close()
 
                 target = new_target
-                offset, exist = get_offset(target)
+                offset = get_offset(target)
                 f, error = open_tail(target, offset)
                 if error:
+                    put_offset(target, 0)
                     return
                 _last_target_filename = target
 
@@ -512,7 +497,6 @@ def tail(filename, follow_file):
 
 def sig_handler(signal, frame):
     if _verbose:
-        offset, exist = get_offset(_last_target_filename)
         if _follow_file:
             print colorize_ok("\n>>> Last Open :%s" % _last_target_filename)
         else:
@@ -550,7 +534,7 @@ def print_version():
 
 def main():
     global _version
-    _version = "0.1.9"
+    _version = "0.1.10"
 
     global _skip_name
     _skip_name = False
