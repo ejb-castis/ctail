@@ -229,7 +229,7 @@ class CtailTests(unittest.TestCase):
             abs_file_path = os.path.join(
                 ctail.get_path_of(self.file_path), self.file_name)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, False)
             self.assertEqual(True, exist)
             self.assertEqual(abs_another_file_path, target)
@@ -237,7 +237,7 @@ class CtailTests(unittest.TestCase):
             time.sleep(0.1)
             self.appendFile(2, 2)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, False)
             self.assertEqual(True, exist)
             self.assertEqual(abs_file_path, target)
@@ -245,7 +245,7 @@ class CtailTests(unittest.TestCase):
             time.sleep(0.1)
             self.appendAnotherFile(2, 2)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, False)
             self.assertEqual(True, exist)
             self.assertEqual(abs_another_file_path, target)
@@ -266,7 +266,7 @@ class CtailTests(unittest.TestCase):
             ctail._verbose = False
             ctail._follow_file = True
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.file_path), target)
@@ -274,7 +274,7 @@ class CtailTests(unittest.TestCase):
             time.sleep(0.1)
             self.appendFile(2, 2)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.file_path), target)
@@ -282,7 +282,7 @@ class CtailTests(unittest.TestCase):
             time.sleep(0.1)
             self.appendAnotherFile(2, 2)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.file_path), target)
@@ -290,7 +290,7 @@ class CtailTests(unittest.TestCase):
             time.sleep(0.1)
             self.appendFile(3, 3)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.another_file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.another_file_path), target)
@@ -298,7 +298,7 @@ class CtailTests(unittest.TestCase):
             time.sleep(0.1)
             self.appendAnotherFile(3, 3)
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.another_file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.another_file_path), target)
@@ -319,7 +319,7 @@ class CtailTests(unittest.TestCase):
             ctail._verbose = False
             ctail._follow_file = True
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.file_path), target)
@@ -370,7 +370,7 @@ class CtailTests(unittest.TestCase):
             ctail._verbose = False
             ctail._follow_file = True
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, True)
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.file_path), target)
@@ -395,7 +395,7 @@ class CtailTests(unittest.TestCase):
             ctail._verbose = False
             ctail._follow_file = True
 
-            target, exist, orignal_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.file_path, True)
             print("get tail file:{}, {} ".format(
                 os.path.abspath(self.file_path), target))
@@ -434,39 +434,40 @@ class CtailTests(unittest.TestCase):
             if f is not None:
                 f.close()
 
-    # -f option, soft link file 의 open test
+    # -f option, soft link file 의 inode 값 변경
     def test_open_soft_link_change_point_with_option_f(self):
         self.newFile(1)
+        self.newAnotherFile(1)
         f = None
         try:
             self.linkFile(self.file_name)
             original_path = os.readlink(self.soft_link_file_path)
-            print("link:{} to original:{} ".format(
-                self.soft_link_file_path, original_path))
+            # print("link:{} to original:{} ".format(
+            #     self.soft_link_file_path, original_path))
 
             ctail._verbose = False
             ctail._follow_file = True
 
-            target, exist, original_target = ctail.get_tail_filename(
+            target, exist, inode = ctail.get_tail_filename(
                 self.soft_link_file_path, True)
+
+            #print("target:{}, exist:{}, inode:{} ".format(target, exist, inode))
 
             self.assertEqual(True, exist)
             self.assertEqual(os.path.abspath(self.soft_link_file_path), target)
-            self.assertEqual(os.path.abspath(self.file_path), original_target)
 
-            f, error = ctail.open_tail(target)
-            self.assertEqual(False, error)
+            self.linkFile(self.another_file_name)
+            original_path = os.readlink(self.soft_link_file_path)
+            # print("link:{} to original:{} ".format(
+            #     self.soft_link_file_path, original_path))
 
-            offset = f.tell()
-            size = os.path.getsize(target)
-            self.assertEqual(8, size)
-            self.assertEqual(0, offset)
+            target, exist, new_inode = ctail.get_tail_filename(
+                self.soft_link_file_path, True)
 
-            # 첫 번째 tail
-            offset, error = ctail.keep_tail(f)
-            self.assertEqual(False, error)
-            self.assertEqual(8, size)
-            self.assertEqual(8, offset)
+            #print("target:{}, exist:{}, inode:{} ".format(target, exist, new_inode))
+
+            self.assertEqual(True, exist)
+            self.assertNotEqual(inode, new_inode)
 
         except Exception as e:
             self.assertTrue(False, "error, {}".format(e))
