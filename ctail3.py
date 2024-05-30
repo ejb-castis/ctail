@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 '''
 Created on 2014. 06. 09
@@ -261,7 +261,7 @@ def print_format_log(log):
                 log, error = format_ncsacombinedlog(log)
                 if error:
                     log, error = format_ncsalog(log)
-    print log,
+    print(log, end=' ')
 
 
 def is_binary(filename):
@@ -328,11 +328,11 @@ def get_tail_filename(filename, follow_file):
     if follow_file:
         if not exist_file(filename):
             if _verbose:
-                print colorize_ok('>>> Not found :%s' % filename)
+                print (colorize_ok('>>> Not found :{}'.format(filename)))
             return None, False, inode
         if is_binary(filename):
             if _verbose:
-                print colorize_ok('>>> Not a text file :%s' % filename)
+                print (colorize_ok('>>> Not a text file :{}'.format(filename)))
             return None, False, inode
         tail_file = filename
         inode = os.stat(tail_file).st_ino
@@ -341,28 +341,29 @@ def get_tail_filename(filename, follow_file):
             path = get_path_of(filename)
             if not exist_directory(path):
                 if _verbose:
-                    print colorize_ok('>>> Not found path :%s' % path)
+                    print (colorize_ok('>>> Not found path :{}'.format(path)))
                 return None, False, inode
             tail_file = newest_file_in(path)
             if tail_file == "":
                 if _verbose:
-                    print colorize_ok('>>> Error : No text files in %s' % path)
+                    print (colorize_ok(
+                        '>>> Error : No text files in {}'.format(path)))
                 return None, False, inode
             inode = os.stat(tail_file).st_ino
         except Exception as e:
             if _verbose:
-                print colorize_ok('>>> Error :%s, %s' % (filename, e))
-            return None, False, None, inode
+                print (colorize_ok('>>> Error :{}, {}'.foramt(filename, e)))
+            return None, False, inode
     return tail_file, True, inode
 
 
-def keep_tail(f):
+def keep_tail(f):  # -> (offset, error)
     while True:
         try:
             line = f.readline()
         except Exception as e:
             if _verbose:
-                print colorize_ok('>>> Error : %s' % e)
+                print (colorize_ok('>>> Error :{}'.format(e)))
             f.close()
             return 0, True
         if line:
@@ -393,17 +394,17 @@ def open_tail(filename, offset=0):
         f = open(filename)
     except Exception as e:
         if _verbose:
-            print colorize_ok('>>> Open Error :%s, %s' % (filename, e))
+            print (colorize_ok('>>> Open Error :{}, {}'.format(filename, e)))
         return None, True
     try:
         size = os.path.getsize(filename)
         if _verbose:
             if _follow_file:
-                print colorize_ok(">>> Open :%s, size :%d" % (filename, size))
+                print (colorize_ok(">>> Open :{}, size :{:,}".format(filename, size)))
             else:
                 path = get_path_of(filename)
-                print colorize_ok(">>> Open :%s in %s, size :%d" %
-                                  (filename, path, size))
+                print (colorize_ok(
+                    ">>> Open :{} in {}, size :{:,}".format(filename, path, size)))
         if offset > 0:
             f.seek(offset, 0)
         else:
@@ -413,7 +414,7 @@ def open_tail(filename, offset=0):
     except Exception as e:
         f.close()
         if _verbose:
-            print colorize_ok('>>> Error :%s, %s' % (filename, e))
+            print (colorize_ok('>>> Error :{}, {}'.format(filename, e)))
         return None, True
     return f, False
 
@@ -426,7 +427,7 @@ def is_inode_changed(file, inode):
         return False, None
     except Exception as e:
         if _verbose:
-            print colorize_ok('>>> Error :%s' % e)
+            print (colorize_ok('>>> Error :{}'.format(e)))
         return None, True
 
 
@@ -501,38 +502,39 @@ def tail(filename, follow_file):
 def sig_handler(signal, frame):
     if _verbose:
         if _follow_file:
-            print colorize_ok("\n>>> Last Open :%s" % _last_target_filename)
+            print (colorize_ok("\n>>> Last Open :{}".format(_last_target_filename)))
         else:
             path = get_path_of(_last_target_filename)
-            print colorize_ok("\n>>> Last Open :%s in %s" %
-                              (_last_target_filename, path))
+            print (colorize_ok("\n>>> Last Open :{} in {}".format(
+                _last_target_filename, path)))
     sys.exit(0)
 
 
 def usage():
-    print os.path.basename(sys.argv[0]) + ' ' + _version
-    print 'Usage: %s [option] FILE' % os.path.basename(sys.argv[0])
-    print ' or :  %s [option] DIRECTORY' % os.path.basename(sys.argv[0])
-    print ''
-    print 'Continuosly tail the newest text file in DIRECTORY(or in the directory of FILE)'
-    print 'or tail the specific FILE with -f option'
-    print 'Options:'
-    print '--version      print version'
-    print '-f             follow FILE'
-    print '-r, --retry    keep trying to open a file if it is inaccessible. sleep for 1.0 sec between retry iterations'
-    print '-v, --verbose  print messages verbosely'
-    print '--simple       to print simple format'
-    print '-N             not to print name field of cilog'
-    print '-I             not to print id field of cilog'
-    print '-D             not to print date field of cilog'
-    print '-T             not to print time field of cilog'
-    print '-L             not to print level field of cilog'
-    print '-S             not to print section field of cilog'
-    print '-C             not to print code field of cilog'
+    print (os.path.basename(sys.argv[0]) + ' ' + _version)
+    print ('Usage: {} [option] FILE'.format(os.path.basename(sys.argv[0])))
+    print (' or :  {} [option] DIRECTORY'.format(
+        os.path.basename(sys.argv[0])))
+    print ('')
+    print ('Continuosly tail the newest text file in DIRECTORY(or in the directory of FILE)')
+    print ('or tail the specific FILE with -f option')
+    print ('Options:')
+    print ('--version      print version')
+    print ('-f             follow FILE')
+    print ('-r, --retry    keep trying to open a file if it is inaccessible. sleep for 1.0 sec between retry iterations')
+    print ('-v, --verbose  print messages verbosely')
+    print ('--simple       to print simple format')
+    print ('-N             not to print name field of cilog')
+    print ('-I             not to print id field of cilog')
+    print ('-D             not to print date field of cilog')
+    print ('-T             not to print time field of cilog')
+    print ('-L             not to print level field of cilog')
+    print ('-S             not to print section field of cilog')
+    print ('-C             not to print code field of cilog')
 
 
 def print_version():
-    print _version
+    print (_version)
 
 
 def main():
@@ -588,8 +590,8 @@ def main():
         options, args = getopt.getopt(sys.argv[1:], "vfhrNIDTLSC", [
             "simple", "help", "retry", "version", "verbose"])
     except getopt.GetoptError as err:
-        print str(err)
-        print ""
+        print (err)
+        print ("")
         usage()
         sys.exit(1)
 
