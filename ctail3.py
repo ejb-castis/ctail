@@ -4,37 +4,61 @@
 Created on 2014. 06. 09
 @author: <mwpark@castis.com>
 '''
-import signal
-import time
-import os
-import sys
-import re
+import argparse
+import datetime
 import fileinput
-import getopt
+import os
+import re
+import signal
+import sys
+import time
+
+import chardet
+from dateutil import parser
+
+program_version = "0.1.2"
 
 Colors = {
-    "name": '\033[0m',
-    "id": '\033[0m',
-    "date": '\033[1;34m',
-    "time": '\033[1;36m',
+    "id": '\033[0;36m',
+    "event": '\033[0;38;05;118m',
+    "date": '\033[0;34m',
+    "time": '\033[0;36m',
     "level": '\033[0;38;05;81m',
-    "section": '\033[0m',
+    "section": '\033[0;38;05;208m',
     "code": '\033[0;32m',
-    "description": '\033[0;38;05;187m',
-    "error": '\033[0;38;05;161m',
-    "ok": '\033[0;38;05;118m',
+    "description": '\033[0m',
+    "error": '\033[0;31m',
     "number": '\033[0;38;05;141m',
-    "keyword": '\033[0;38;05;208m',
-    "variable": '\033[0;38;05;187m',
-    "value": '\033[0;33m',
-    "blue":     '\033[0;38;05;081m',
-    "pink":     '\033[1;38;05;161m',
-    "pinkbold": '\033[1;38;05;161m',
-    "orange":   '\033[0;38;05;208m',
-    "green":    '\033[0;38;05;118m',
-    "purple":   '\033[0;38;05;141m',
-    "string":   '\033[0;92m',
-    "endc":     '\033[0m'}
+    "keyword": '\033[0;95m',
+    "key_value": '\033[0;96m',
+    "where":   '\033[0;33m',
+    "request":   '\033[0;32m',
+    "status_code":   '\033[0;93m',
+    "ip":   '\033[0;95m',
+    "user_name":   '\033[0;96m',
+    "verbose": '\033[0;38;05;118m',
+    "debug": '\033[0;38;05;118m'
+}
+
+Ansi16Colors = {
+    "reset": '\033[0m', # reset
+    "black": '\033[0;30m',
+    "red": '\033[0;31m',
+    "green": '\033[0;32m',
+    "yellow": '\033[0;33m',
+    "blue": '\033[0;34m',
+    "magenta": '\033[0;35m',
+    "cyan": '\033[0;36m',
+    "white": '\033[0;37m',
+    "bright_black": '\033[0;90m',
+    "bright_red": '\033[0;91m',
+    "bright_green": '\033[0;92m',
+    "bright_yellow": '\033[0;93m',
+    "bright_blue": '\033[0;94m',
+    "bright_magenta": '\033[0;95m',
+    "bright_cyan": '\033[0;96m',
+    "bright_white": '\033[0;97m',
+}
 
 event_type_major = {
     0x010000: 'SU',
@@ -68,6 +92,58 @@ event_level = {
     128: 'fail',
     256: 'except'}
 
+class Options:
+    def __init__(self):
+        self.keyword_coloring = False
+        self.keyvalue_coloring = False
+        self.cat = False
+        self.debug = False
+        self.verbose = False
+        self.retry = False
+        self.skip_name = False
+        self.skip_id = False
+        self.skip_date = False
+        self.skip_time = False
+        self.skip_level = False
+        self.skip_section = False
+        self.skip_code = False
+        self.print_simple_format = False
+        self.follow_file = False
+        self.fileoffset_repository = {}
+        self.last_target_filename = ""
+
+_fileoffset_repository = {}
+
+def put_offset(filename, offset):
+    global _fileoffset_repository
+    _fileoffset_repository[filename] = offset
+
+
+def get_offset(filename):
+    global _fileoffset_repository
+    try:
+        offset = _fileoffset_repository[filename]
+        return offset
+    except Exception as e:
+        return 0
+
+def apply_color(text, color_name):
+    ansi_code = Colors.get(color_name, '\033[0m')
+    return f"{ansi_code}{text}\033[0m"
+
+def print_verbose(text):
+    print(apply_color(text, 'verbose'))
+    
+def verbose(heading, message, options):
+    if options.verbose:
+        print_verbose(f'{heading}: {message}')
+
+def print_debug(text):
+    print(apply_color(text, 'debug'))
+
+def debug(heading, message, options):
+    if options.debug:
+        print_debug(f'{heading}: {message}')
 
 def get_event_type_string(event):
     try:
@@ -89,179 +165,426 @@ def get_event_level_string(level):
 
 def get_time_string_gmt_to_kst(timestamp):
     try:
-        s = time.strftime('%Y-%m-%d %H:%M:%S',
-                          time.gmtime(float(timestamp)+32400))
-        return s
+        s = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(float(timestamp)+32400))
+        return s, False, ""
     except Exception as e:
-        return ''
+        return '', False, str(e)
 
 
 def translate(log):
     try:
-        event, level, datetime, desc = log.split(',', 3)
+        event, level, datetime, description = log.split(',', 3)
     except Exception as e:
-        return log
+        return log, False, str(e)
+    
     event = get_event_type_string(event)
     level = get_event_level_string(level)
-    datetime = get_time_string_gmt_to_kst(datetime)
-    return ','.join([event, level, datetime, desc])
+    datetime, error, msg = get_time_string_gmt_to_kst(datetime)
+    if error:
+        return '', True, msg
+
+    return ','.join([event, level, datetime, description]), False, ""
 
 
-def format_eventlog(log):
-    try:
-        event, level, datetime, desc = log.split(',', 3)
-    except Exception as e:
-        return log, True
-    if level in ['error', 'fail', 'warning', 'except']:
-        level = Colors['pinkbold'] + level + Colors['endc']
+def key_value_coloring(match):
+    return apply_color(f'{match.group()}', 'key_value')
+
+def key_word_coloring(match):
+    return apply_color(f'{match.group()}', 'keyword')
+
+def format_eventlog(log, options):
+    if log.startswith('0x'):
+        log, error, msg = translate(log)
+        if error:
+            return log, True, msg
     else:
-        level = Colors['blue'] + level + Colors['endc']
-    event = Colors['green'] + event + Colors['endc']
-    desc = re.sub("\[([^](]*)\]", "[" + Colors['keyword'] +
-                  r"\1" + Colors['endc'] + "]", desc)
-    desc = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
-                  r"\1" + Colors['endc'] + ")", desc)
-    if _skip_date and _skip_time:
-        datetime = ""
-    if _skip_level:
-        level = ""
-    return '%s %s %s %s' % (datetime, event, level, desc), False
+        return log, True, "Not eventlog format, does not start with '0x'"
 
-
-def colorize_ok(str):
-    return Colors['ok'] + str + Colors['endc']
-
-
-def format_cilog(log):
     try:
-        name, id, date, time, level, section, code, description = log.split(
-            ',', 7)
+        event, level, datetime, description = log.split(',', 3)
     except Exception as e:
-        return log, True
-    name = Colors['name'] + name + Colors['endc']
-    if _skip_name:
+        return log, True, str(e)
+    
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level,'error')
+    else:
+        level = apply_color(level, 'level')
+
+    event = apply_color(event, 'event')
+    
+    if options.keyword_coloring:
+        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
+
+    description = apply_color(description, 'description')
+
+    if options.skip_date and options.skip_time:
+        datetime = ""
+
+    if options.skip_level:
+        level = ""
+
+    if options.print_simple_format:
+        return '%s %s %s %s' % (level, datetime, event, description), False, ""
+
+    return '%s %s %s %s' % (datetime, event, level, description), False, ""
+
+def format_cilog(log, options):
+    try:
+        name, id, date, time, level, section, code, description = log.split(',', 7)
+    except Exception as e:
+        return log, True, str(e)
+    
+    name = apply_color(name, 'name')
+    if options.skip_name:
         name = ""
 
-    id = Colors['id'] + id + Colors['endc']
-    if _skip_id:
+    id = apply_color(id, 'id')
+    if options.skip_id:
         id = ""
 
-    date = Colors['date'] + date + Colors['endc']
-    if _skip_date:
+    if is_valid_date(date + ' ' + time) == None:
+        return log, True, "Invalid date time format"
+    
+    date = apply_color(date, 'date')
+    if options.skip_date:
         date = ""
 
-    time = Colors['time'] + time + Colors['endc']
-    if _skip_time:
+    time = apply_color(time, 'time')
+    if options.skip_time:
         time = ""
 
-    if level in ['Error', 'Fail', 'Warning', 'Exception', 'error', 'warning', 'critical']:
-        level = Colors['error'] + level + Colors['endc']
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level, 'error')
     else:
-        level = Colors['level'] + level + Colors['endc']
-    if _skip_level:
+        level = apply_color(level, 'level')
+    if options.skip_level:
         level = ""
 
-    section = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                     r"\1" + Colors['endc'] + "]", section)
-    section = Colors['section'] + section + Colors['endc']
-    if _skip_section:
+    section = apply_color(section, 'section')
+    if options.skip_section:
         section = ""
 
-    code = Colors['code'] + code + Colors['endc']
-    if _skip_code:
+    code = apply_color(code, 'code')
+    if options.skip_code:
         code = ""
 
-    description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + "]", description)
-    description = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + ")", description)
-    description = Colors['description'] + description + Colors['endc']
+    if options.keyword_coloring:
+        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
 
-    if _print_simple_format:
-        return ','.join([level, date, time, section, code, description]), False
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
 
-    return ','.join([name, id, date, time, level, section, code, description]), False
+    description = apply_color(description, 'description')
+
+    if options.print_simple_format:
+        return ','.join([level, date, time, section, code, description]), False, ""
+
+    return ','.join([name, id, date, time, level, section, code, description]), False, ""
 
 
-def format_ncsacombinedlog(log):
+# "127.0.0.1 - - [01/Jan/2000:00:00:00 +0000] \"GET /index.html HTTP/1.1\" 200 2326 \"-\" \"Mozilla/5.0\""
+#"127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" 200 2326 \"http://www.example.com/start.html\" \"Mozilla/4.08 [en] (Win98; I ;Nav)\""
+# IP 주소 (127.0.0.1): 클라이언트의 IP 주소입니다.
+# 로그명 (-): RFC 1413에 정의된 클라이언트의 식별자입니다. 사용되지 않는 경우 대시(-)로 표시됩니다.
+# 유저명 (frank): HTTP 인증 시스템을 통해 클라이언트를 인증한 사용자명입니다. 인증되지 않은 경우 대시(-)로 표시됩니다.
+# 날짜와 시간 ([10/Oct/2000:13:55:36 -0700]): 요청이 수신된 날짜와 시간입니다. 형식은 [day/month/year:hour:minute:second zone]입니다.
+# 요청 ("GET /apache_pb.gif HTTP/1.0"): 클라이언트의 요청입니다. 일반적으로 HTTP 메서드, 요청 URL, HTTP 버전으로 구성됩니다.
+# 상태 코드 (200): 서버의 응답 상태 코드입니다.
+# 응답 크기 (2326): 서버가 클라이언트에게 전송한 응답의 바이트 크기입니다.
+# 참조 URL ("http://www.example.com/start.html"): 클라이언트가 현재 요청을 하기 전에 마지막으로 방문한 페이지의 URL입니다.
+# 유저 에이전트 ("Mozilla/4.08 [en] (Win98; I ;Nav)"): 클라이언트의 브라우저 및 운영 체제 정보를 나타내는 문자열입니다.
+def is_ncsa_combined_log(log_line):
+    # 정규 표현식 패턴 정의
+    pattern = re.compile(r'^(\S+) (\S+) (\S+) \[(.*?)\] "(.*?)" (\d{3}) (\d+|-) "(.*?)" "(.*?)"$')
+    # 정규 표현식 패턴과 로그 라인 매칭
+    match = pattern.match(log_line)
+    return match is not None
+
+def is_valid_ip(ip):
+    parts = ip.split('.')
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not part.isdigit():
+            return False
+        num = int(part)
+        if num < 0 or num > 255:
+            return False
+    return True
+
+def is_valid_ncsa_date(date_str):
     try:
-        host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(
-            ' ', 10)
-    except Exception as e:
-        return log, True
-    datetimetz = datetime + " " + tz
-    datetimetz = Colors['date'] + datetimetz + Colors['endc']
-    request = method + " " + uri + " " + version
-    request = Colors['green'] + request + Colors['endc']
-    statuscode = Colors['blue'] + statuscode + Colors['endc']
-    if _skip_date and _skip_time:
-        datetimetz = ""
-    return '%s %s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes, combined), False
+        datetime.datetime.strptime(date_str, "%d/%b/%Y:%H:%M:%S %z")
+        return True
+    except ValueError:
+        return False
 
-
-def format_ncsalog(log):
+def format_ncsacombinedlog(log, options):
     try:
-        host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(
-            ' ', 9)
+        host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
     except Exception as e:
-        return log, True
-    datetimetz = datetime + " " + tz
-    datetimetz = Colors['date'] + datetimetz + Colors['endc']
+        return log, True, str(e)
+    
+    if not is_valid_ip(host):
+        return log, True, "Invalid IP address"
+    
+    if not datetime.startswith('[') or not tz.endswith(']'):
+        return log, True, "Invalid datetime format"
+    
+    date_str = ''.join(datetime+' '+tz).strip('[]')
+    if not is_valid_ncsa_date(date_str):
+        return log, True, "Invalid date format"
+    
+    host = apply_color(host, 'ip')
+    id = apply_color(id, 'id')
+    username = apply_color(username, 'user_name')
+    datetimetz = apply_color(datetime+' '+tz, 'date')
     request = method + " " + uri + " " + version
-    request = Colors['green'] + request + Colors['endc']
-    statuscode = Colors['blue'] + statuscode + Colors['endc']
-    if _skip_date and _skip_time:
+    request = apply_color(request, 'request')
+    statuscode = apply_color(statuscode, 'status_code')
+    bytes = apply_color(bytes, 'number')
+
+    if options.skip_date and options.skip_time:
         datetimetz = ""
-    return '%s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes), False
+
+    if options.print_simple_format:
+        return '%s %s %s %s %s' % (datetimetz, request, statuscode, bytes, combined), False, ""
+    
+    return '%s %s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes, combined), False, ""
 
 
-def format_simplelog(log):
+# NCSA Common Log Format (CLF)
+# host ident authuser [date] "request" status bytes
+# host: 클라이언트의 IP 주소 또는 호스트 이름.
+# ident: 클라이언트의 RFC 1413 식별자 (사용되지 않을 경우 -).
+# authuser: HTTP 인증을 통해 클라이언트를 인증한 사용자명 (사용되지 않을 경우 -).
+# date: 요청이 수신된 날짜와 시간.
+# request: 클라이언트의 요청 라인 (예: "GET /index.html HTTP/1.0").
+# status: HTTP 응답 상태 코드.
+# bytes: 클라이언트에 전송된 응답의 크기 (바이트 단위).
+# 127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326
+def format_ncsalog(log, options):
+    try:
+        host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
+    except Exception as e:
+        return log, True, str(e)
+    
+    if not is_valid_ip(host):
+        return log, True, "Invalid IP address"
+    
+    if not datetimetz.startswith('[') or not datetimetz.endswith(']'):
+        return log, True, "Invalid datetime format"
+    
+    date_str = ' '.join(datetimetz).strip('[]')
+    if not is_valid_ncsa_date(date_str):
+        return log, True, "Invalid date format"
+    
+    host = apply_color(host, 'ip')
+    id = apply_color(id, 'id')
+    username = apply_color(username, 'name')
+    datetimetz = apply_color(datetimetz, 'date')
+    request = method + " " + uri + " " + version
+    request = apply_color(request, 'request')
+    statuscode = apply_color(statuscode, 'status_code')
+    bytes = apply_color(bytes, 'number')
+
+    if options.skip_date and options.skip_time:
+        datetimetz = ""
+
+    if options.print_simple_format:
+        return '%s %s %s %s' % (datetimetz, request, statuscode, bytes), False, ""
+
+    return '%s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes), False, ""
+
+# 2024-05-15 20:01:53,[INFO ],LocalContainerEntityManagerFactoryBean.java,createNativeEntityManagerFactory(349):"Building JPA container EntityManagerFactory for persistence unit 'cbank'"
+def format_simple_log4j(log, options):
+    try:
+        datetime, level, rest = log.split(',', 2)
+        section, description = rest.split(':', 1)
+        date, time = datetime.split(' ', 1)
+    except Exception as e:
+        return log, True, str(e)
+    
+    date = apply_color(date, 'date')
+    time = apply_color(time, 'time')
+
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level, 'error')
+    else:
+        level = apply_color(level, 'level')
+
+    section = apply_color(section, 'where')
+
+    if options.keyword_coloring:
+        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
+
+    description = apply_color(description, 'description')
+
+    if options.skip_date:
+        datetime = ""
+
+    if options.skip_time:
+        time = ""
+
+    if options.skip_level:
+        level = ""
+
+    if options.skip_section:
+        section = ""
+    
+    if options.print_simple_format:
+        return '%s,%s %s,%s:%s' % (level, date, time, section, description), False, ""
+    
+    return '%s %s,%s,%s:%s' % (date, time, level, section, description), False, ""
+
+# 15-May-2024 20:20:21.822 정보 [main] org.apache.catalina.core.StandardService.stopInternal 서비스 [Catalina]을(를) 중지시킵니다.
+# 15-May-2024 19:30:17.676 정보 [main] org.apache.catalina.core.AprLifecycleListener.initializeSSL OpenSSL이 성공적으로 초기화되었습니다: [OpenSSL 3.0.11 19 Sep 2023]
+# 04-Feb-2024 11:54:06.612 INFO [localhost-startStop-12] org.apache.catalina.core.ApplicationContext.log Closing Spring root WebApplicationContext
+def is_valid_date(date_str):
+    try:
+        # 문자열을 datetime 객체로 변환
+        date_obj = parser.parse(date_str)
+        return date_obj
+    except ValueError:
+        return None
+
+def format_tomcat_log(log, options):
+    try:
+        date, time, level, section, where, description = log.split(' ', 5)
+    except Exception as e:
+        return log, True, str(e)
+    
+    if is_valid_date(date+' '+time) == None:
+        return log, True, 'invalid date'
+
+    date = apply_color(date, 'date')
+    time = apply_color(time, 'time')
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level, 'error')
+    else:
+        level = apply_color(level, 'level')
+    section = apply_color(section, 'section')
+    where = apply_color(where, 'where')
+
+    if options.keyword_coloring:
+        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
+        
+    description = apply_color(description, 'description')
+
+    if options.skip_date:
+        date = ""
+    if options.skip_time:
+        time = ""
+    if options.skip_level:
+        level = ""
+    if options.skip_section:
+        section = ""
+    
+    if options.print_simple_format:
+        return '%s %s %s %s %s %s' % (level, date, time, section, where, description), False, ""
+
+    return '%s %s %s %s %s %s' % (date, time, level, section, where, description), False, ""
+
+def format_simplelog(log, options):
     try:
         level, date, time, section, description = log.split(' ', 4)
     except Exception as e:
-        return log, True
-    date = Colors['date'] + date + Colors['endc']
-    if _skip_date:
+        return log, True, str(e)
+    
+    if is_valid_date(date + ' ' + time) == None:
+        return log, True, "Invalid date time format"
+
+    date = apply_color(date, 'date')
+    if options.skip_date:
         date = ""
 
-    time = Colors['time'] + time + Colors['endc']
-    if _skip_time:
+    time = apply_color(time, 'time')
+    if options.skip_time:
         time = ""
 
-    if level in ['Error', 'Fail', 'Warning', 'Exception', 'ERROR', 'FAIL', 'error', 'warning', 'critical']:
-        level = Colors['error'] + level + Colors['endc']
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level, 'error')
     else:
-        level = Colors['level'] + level + Colors['endc']
-    if _skip_level:
+        level = apply_color(level, 'level')
+    if options.skip_level:
         level = ""
 
-    section = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                     r"\1" + Colors['endc'] + "]", section)
-    section = Colors['section'] + section + Colors['endc']
-    if _skip_section:
+    section = apply_color(section, 'section')
+    if options.skip_section:
         section = ""
 
-    description = re.sub("\[([^]]*)\]", "[" + Colors['keyword'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + "]", description)
-    description = re.sub("\(([^)]*)\)", "(" + Colors['value'] +
-                         r"\1" + Colors['endc'] + Colors['description'] + ")", description)
-    description = Colors['description'] + description + Colors['endc']
+    if options.keyword_coloring:
+        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
 
-    return ' '.join([level, date, time, section, description]), False
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
 
+    description = apply_color(description, 'description')
+    
+    return ' '.join([level, date, time, section, description]), False, ""
 
-def print_format_log(log):
-    if log.startswith('0x'):
-        log, error = format_eventlog(translate(log))
-    else:
-        log, error = format_cilog(log)
+# example = """
+# java.lang.NullPointerException
+# at cbank.controller.BillController.getMakeBillView(BillController.java:103)
+# at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+# at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+# at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+# at java.lang.reflect.Method.invoke(Method.java:498)
+# at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:205)
+# at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:133)
+# """
+def format_simple_trace(log, options):
+    if options.keyword_coloring:
+        log = re.sub("\[([^]]+)\]", key_word_coloring, log)
+        log = re.sub("\(([^)]+)\)", key_word_coloring, log)
+
+    if options.keyvalue_coloring:
+        log = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, log)
+
+    return log, False, ""
+
+def print_format_log(log, options):
+
+    def try_format(log, formatter, log_type):
+        formatted_log, error, msg = formatter(log, options)
         if error:
-            log, error = format_simplelog(log)
-            if error:
-                log, error = format_ncsacombinedlog(log)
-                if error:
-                    log, error = format_ncsalog(log)
-    print(log, end=' ')
+            debug('Format Info', f'NOT {log_type}, msg: {msg}', options)
+        else:
+            debug('Format Info', log_type, options)
+
+        return formatted_log, error
+
+    formatters = [
+        (format_eventlog, 'EVENTLOG'),
+        (format_cilog, 'CILOG'),
+        (format_ncsacombinedlog, 'NCSACOMBINE'),
+        (format_ncsalog, 'NCSA'),
+        (format_simple_log4j, 'LOG4J'),
+        (format_tomcat_log, 'TOMCAT'),
+        (format_simplelog, 'SIMPLE'),
+        (format_simple_trace, 'TRACE')
+    ]
+
+    for formatter, log_type in formatters[1:]:
+        formatted_log, error = try_format(log, formatter, log_type)
+        if not error:
+            break
+
+    print(formatted_log, end=' ')
 
 
 def is_binary(filename):
@@ -271,8 +594,11 @@ def is_binary(filename):
     @author: Trent Mick <TrentM@ActiveState.com>
     @author: Jorge Orpinel <jorge@orpinel.com>"""
     with open(filename, 'rb') as f:
-        CHUNKSIZE = 1024
-        while 1:
+        CHUNKSIZE = 1024  # 1KB씩 읽기
+        max_bytes_to_read = 4096  # 처음 4KB만 읽기
+        bytes_read = 0
+
+        while bytes_read < max_bytes_to_read:
             chunk = f.read(CHUNKSIZE)
             if b'\0' in chunk:  # found null byte
                 return True
@@ -280,25 +606,22 @@ def is_binary(filename):
                 break  # done
     return False
 
-
 def newest_file_in(path):
-    def mtime(f): return os.stat(os.path.join(path, f)).st_mtime
-    ls = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
-    if len(ls) == 0:
-        return ""
-
     newest_file_name = ""
-    soreted_ls = list(sorted(ls, key=mtime))
-    while (len(soreted_ls) > 0):
-        f = soreted_ls.pop()
-        if is_binary(os.path.join(path, f)) == False:
-            newest_file_name = f
-            break
+    newest_mtime = -1
 
-    if newest_file_name == "":
-        return ""
-    return os.path.join(path, newest_file_name)
+    for f in os.listdir(path):
+        file_path = os.path.join(path, f)
+        if os.path.isfile(file_path):
+            try:
+                mtime = os.path.getmtime(file_path)
+                if mtime > newest_mtime and not is_binary(file_path):
+                    newest_mtime = mtime
+                    newest_file_name = file_path
+            except OSError:
+                continue
 
+    return newest_file_name
 
 def get_path_of(filename):
     path = os.path.realpath(filename)
@@ -306,105 +629,111 @@ def get_path_of(filename):
         path = os.path.dirname(path)
     return path
 
-
 def exist_file(filename):
     return os.path.exists(filename) and os.path.isfile(filename)
-
 
 def exist_directory(directory):
     return os.path.exists(directory)
 
-
-def cat():
+def cat(options):
     for line in fileinput.input("-"):
-        print_format_log(line)
+        print_format_log(line, options)
         sys.stdout.softspace = 0
 
+def cat_file(filename, options):
+    target, exist, inode = get_tail_filename(filename, True, options)
+    if not exist:
+        return
+    
+    filename = target
+    encoding = detect_file_encoding(filename)
+    verbose('Open', f'{filename}, detected encoding is {encoding}', options)
+    
+    try:
+        f = open(filename, 'r', encoding=encoding, errors='replace')
+    except Exception as e:
+        verbose('Open Error', f'{filename}, {e}', options)
+        return
 
-def get_tail_filename(filename, follow_file):
+    for line in f:
+        print_format_log(line, options)
+
+    return
+
+def get_tail_filename(filename, follow_file, options):
     filename = os.path.abspath(filename)
-    tail_file = None
-    inode = None
     if follow_file:
-        if not exist_file(filename):
-            if _verbose:
-                print (colorize_ok('>>> Not found :{}'.format(filename)))
-            return None, False, inode
-        if is_binary(filename):
-            if _verbose:
-                print (colorize_ok('>>> Not a text file :{}'.format(filename)))
-            return None, False, inode
-        tail_file = filename
-        inode = os.stat(tail_file).st_ino
-    else:
         try:
-            path = get_path_of(filename)
-            if not exist_directory(path):
-                if _verbose:
-                    print (colorize_ok('>>> Not found path :{}'.format(path)))
-                return None, False, inode
-            tail_file = newest_file_in(path)
-            if tail_file == "":
-                if _verbose:
-                    print (colorize_ok(
-                        '>>> Error : No text files in {}'.format(path)))
-                return None, False, inode
-            inode = os.stat(tail_file).st_ino
+            if not exist_file(filename):
+                verbose('Error', f'Not found: {filename}', options)
+                return None, False, None
+            
+            if is_binary(filename):
+                verbose('Info', f'Not a text file: {filename}', options)
+                return None, False, None
+
+            return filename, True, os.stat(filename).st_ino
+
         except Exception as e:
-            if _verbose:
-                print (colorize_ok('>>> Error :{}, {}'.foramt(filename, e)))
-            return None, False, inode
-    return tail_file, True, inode
+            verbose('Error', f'{filename}, {e}', options)
+            return None, False, None
+    
+    try:
+        path = get_path_of(filename)
+        if not exist_directory(path):
+            verbose('Info', f'Not found path: {path}', options)
+            return None, False, None
+        
+        tail_file = newest_file_in(path)
+        if tail_file == "":
+            verbose('Info', f'No text files in {path}', options)
+            return None, False, None
+        
+        return tail_file, True, os.stat(tail_file).st_ino
+    
+    except Exception as e:
+        verbose('Error', f'{filename}, {e}', options)
+        return None, False, None
 
-
-def keep_tail(f):  # -> (offset, error)
+def keep_tail(f, options):  # -> (offset, error)
     while True:
         try:
             line = f.readline()
         except Exception as e:
-            if _verbose:
-                print (colorize_ok('>>> Error :{}'.format(e)))
+            verbose('Error', f'{e}', options)
             f.close()
             return 0, True
         if line:
-            print_format_log(line)
+            print_format_log(line, options)
             sys.stdout.softspace = 0
         else:
             break
     offset = f.tell()
     return offset, False
 
+def detect_file_encoding(file_path):
+    with open(file_path, 'rb') as f:
+        rawdata = f.read()
+    result = chardet.detect(rawdata)
+    return result['encoding']
 
-def put_offset(filename, offset):
-    global _fileoffset_repository
-    _fileoffset_repository[filename] = offset
-
-
-def get_offset(filename):
-    global _fileoffset_repository
+def open_tail(filename, options, offset=0):
+    encoding = detect_file_encoding(filename)
+    verbose('Open', f'{filename}, detected encoding is {encoding}', options)
+    
     try:
-        offset = _fileoffset_repository[filename]
-        return offset
+        f = open(filename, 'r', encoding=encoding, errors='replace')
     except Exception as e:
-        return 0
-
-
-def open_tail(filename, offset=0):
-    try:
-        f = open(filename)
-    except Exception as e:
-        if _verbose:
-            print (colorize_ok('>>> Open Error :{}, {}'.format(filename, e)))
+        verbose('Open Error', f'{filename}, {e}', options)
         return None, True
     try:
         size = os.path.getsize(filename)
-        if _verbose:
-            if _follow_file:
-                print (colorize_ok(">>> Open :{}, size :{:,}".format(filename, size)))
-            else:
-                path = get_path_of(filename)
-                print (colorize_ok(
-                    ">>> Open :{} in {}, size :{:,}".format(filename, path, size)))
+        if options.follow_file:
+            verbose('Open', '{}, size: {:,}'.format(filename, size), options)
+        else:
+            path = get_path_of(filename)
+            verbose('Open','{} in {}, size: {:,}'.format(filename, path, size), options)
+
         if offset > 0:
             f.seek(offset, 0)
         else:
@@ -413,232 +742,194 @@ def open_tail(filename, offset=0):
                 f.readline()
     except Exception as e:
         f.close()
-        if _verbose:
-            print (colorize_ok('>>> Error :{}, {}'.format(filename, e)))
+        verbose('Error', f'{filename}, {e}', options)
+
         return None, True
     return f, False
 
 
-def is_inode_changed(file, inode):
+def is_inode_changed(file, inode, options):
     try:
         new_inode = os.stat(file).st_ino
         if inode != new_inode:
             return True, None
         return False, None
     except Exception as e:
-        if _verbose:
-            print (colorize_ok('>>> Error :{}'.format(e)))
+        verbose('Error', f'{file}, {e}', options)
+
         return None, True
 
-
-def tail(filename, follow_file):
-    global _last_target_filename
-    target, exist, inode = get_tail_filename(filename, follow_file)
+def tail(filename, options):
+    follow_file = options.follow_file
+    target, exist, inode = get_tail_filename(filename, follow_file, options)
     if not exist:
         return
 
-    f, error = open_tail(target)
+    f, error = open_tail(target, options)
     if error:
         return
-    _last_target_filename = target
+    options.last_target_filename = target
 
     while True:
-        offset, error = keep_tail(f)
+        offset, error = keep_tail(f, options)
         if error:
-            put_offset(str(inode), 0)
-            f.close()
+            clean_up(inode, f, 0)
             return
 
         if follow_file:
-            is_changed, error = is_inode_changed(target, inode)
-            if error:
-                put_offset(str(inode), 0)
-                f.close()
+            if handle_follow_file(f, target, inode, offset, options) is False:
                 return
-
-            if not is_changed:
-                time.sleep(0.1)
-                continue
-
-            target, exist, new_inode = get_tail_filename(target, True)
-            if not exist:
-                put_offset(str(inode), offset)
-                f.close()
-                return
-
-            if inode != new_inode:
-                put_offset(str(inode), offset)
-                f.close()
-
-                inode = new_inode
-                offset = get_offset(str(inode))
-                f, error = open_tail(target, offset)
-                if error:
-                    put_offset(str(inode), 0)
-                    return
         else:
-            new_target, exist, new_inode = get_tail_filename(filename, False)
-            if not exist:
-                put_offset(str(inode), offset)
-                f.close()
+            if handle_non_follow_file(f, filename, target, inode, offset, options) is False:
                 return
-
-            if target != new_target:
-                put_offset(str(inode), offset)
-                f.close()
-
-                target = new_target
-                inode = new_inode
-                offset = get_offset(str(inode))
-                f, error = open_tail(target, offset)
-                if error:
-                    put_offset(str(inode), 0)
-                    return
-                _last_target_filename = target
 
         time.sleep(0.1)
 
+def clean_up(inode, file_obj, offset):
+    put_offset(str(inode), offset)
+    file_obj.close()
 
-def sig_handler(signal, frame):
-    if _verbose:
-        if _follow_file:
-            print (colorize_ok("\n>>> Last Open :{}".format(_last_target_filename)))
+def handle_follow_file(f, target, inode, offset, options):
+    is_changed, error = is_inode_changed(target, inode, options)
+    if error:
+        clean_up(inode, f, 0)
+        return False
+
+    if not is_changed:
+        return None
+
+    new_target, exist, new_inode = get_tail_filename(target, True, options)
+    if not exist:
+        clean_up(inode, f, offset)
+        return False
+
+    if inode != new_inode:
+        clean_up(inode, f, offset)
+
+        inode = new_inode
+        offset = get_offset(str(inode))
+        f, error = open_tail(new_target, options, offset)
+        if error:
+            clean_up(inode, f, 0)
+            return False
+        options.last_target_filename = new_target
+    return None
+
+def handle_non_follow_file(f, filename, target, inode, offset, options):
+    new_target, exist, new_inode = get_tail_filename(filename, False, options)
+    if not exist:
+        clean_up(inode, f, offset)
+        return False
+
+    if target != new_target:
+        clean_up(inode, f, offset)
+
+        target = new_target
+        inode = new_inode
+        offset = get_offset(str(inode))
+        f, error = open_tail(target, options, offset)
+        if error:
+            clean_up(inode, f, 0)
+            return False
+        options.last_target_filename = target
+    return None
+
+
+class Handler:
+    def __init__(self, options):
+        self.options = options
+
+    def sig_handler(self, signal, frame):
+        if self.options.cat:
+            sys.exit(0)
+
+        if self.options.follow_file:
+            verbose('Last Open', f'{self.options.last_target_filename}', self.options)
         else:
-            path = get_path_of(_last_target_filename)
-            print (colorize_ok("\n>>> Last Open :{} in {}".format(
-                _last_target_filename, path)))
-    sys.exit(0)
+            path = get_path_of(self.options.last_target_filename)
+            verbose('Last Open', f'{self.options.last_target_filename} in {path}', self.options)
 
-
-def usage():
-    print (os.path.basename(sys.argv[0]) + ' ' + _version)
-    print ('Usage: {} [option] FILE'.format(os.path.basename(sys.argv[0])))
-    print (' or :  {} [option] DIRECTORY'.format(
-        os.path.basename(sys.argv[0])))
-    print ('')
-    print ('Continuosly tail the newest text file in DIRECTORY(or in the directory of FILE)')
-    print ('or tail the specific FILE with -f option')
-    print ('Options:')
-    print ('--version      print version')
-    print ('-f             follow FILE')
-    print ('-r, --retry    keep trying to open a file if it is inaccessible. sleep for 1.0 sec between retry iterations')
-    print ('-v, --verbose  print messages verbosely')
-    print ('--simple       to print simple format')
-    print ('-N             not to print name field of cilog')
-    print ('-I             not to print id field of cilog')
-    print ('-D             not to print date field of cilog')
-    print ('-T             not to print time field of cilog')
-    print ('-L             not to print level field of cilog')
-    print ('-S             not to print section field of cilog')
-    print ('-C             not to print code field of cilog')
-
+        sys.exit(0)
 
 def print_version():
-    print (_version)
+    print (os.path.basename(sys.argv[0]) + ' ' + program_version)
 
+def get_parser():
+    parser = argparse.ArgumentParser(description=f'tail/cat a log or the newest log in a directory. ver: {program_version}')
+
+    parser.add_argument('filename', nargs='?', default='.', help='file to process, or directory to process, default: .')
+    parser.add_argument('-v', '--verbose', action='store_true', help='enable verbose output')
+    parser.add_argument('-f', '--follow', action='store_true', help='follow a file')
+    parser.add_argument('-r', '--retry', action='store_true', help='retry on failure')
+    parser.add_argument('-N', '--skip-name', action='store_true', help='skip name field when printing log')
+    parser.add_argument('-I', '--skip-id', action='store_true', help='skip ID field when printing log')
+    parser.add_argument('-D', '--skip-date', action='store_true', help='skip date field when printing log')
+    parser.add_argument('-T', '--skip-time', action='store_true', help='skip time field when printing log')
+    parser.add_argument('-L', '--skip-level', action='store_true', help='skip level field when printing log')
+    parser.add_argument('-S', '--skip-section', action='store_true', help='skip section field when printing log')
+    parser.add_argument('-C', '--skip-code', action='store_true', help='skip code field when printing log')
+    parser.add_argument('--simple', action='store_true', help='print in simple format, other than original format')
+    parser.add_argument('--cat', action='store_true', help='enable cat mode, print log and exit')
+    parser.add_argument('--debug', action='store_true', help='enable debug message')
+    parser.add_argument('--keyword', action='store_true', help='enable [keyword], (keyword) coloring')
+    parser.add_argument('--keyvalue', action='store_true', help='enable key=value coloring')
+    parser.add_argument('--version', action='store_true', help='print version information and exit')
+
+    return parser
+
+def set_options(args, options):
+    options.verbose = args.verbose
+    options.follow_file = args.follow
+    options.retry = args.retry
+    options.skip_name = args.skip_name
+    options.skip_id = args.skip_id
+    options.skip_date = args.skip_date
+    options.skip_time = args.skip_time
+    options.skip_level = args.skip_level
+    options.skip_section = args.skip_section
+    options.skip_code = args.skip_code
+    options.print_simple_format = args.simple
+    options.cat = args.cat
+    options.debug = args.debug
+    options.keyword_coloring = args.keyword
+    options.keyvalue_coloring = args.keyvalue
 
 def main():
-    global _version
-    _version = "0.1.11"
+    parser = get_parser()
+    args = parser.parse_args()
 
-    global _skip_name
-    _skip_name = False
+    options = Options()
+    set_options(args, options)
 
-    global _skip_id
-    _skip_id = False
+    handler = Handler(options)
+    signal.signal(signal.SIGINT, handler.sig_handler)
 
-    global _skip_date
-    _skip_date = False
-
-    global _skip_time
-    _skip_time = False
-
-    global _skip_level
-    _skip_level = False
-
-    global _skip_section
-    _skip_section = False
-
-    global _skip_code
-    _skip_code = False
-
-    global _print_simple_format
-    _print_simple_format = False
-
-    signal.signal(signal.SIGINT, sig_handler)
-
-    if len(sys.argv) < 2 and sys.stdin.isatty():
-        usage()
-        sys.exit(1)
-
-    global _verbose
-    _verbose = False
-
-    global _fileoffset_repository
-    _fileoffset_repository = {}
-
-    global _last_target_filename
-    _last_target_filename = ""
-
-    filename = '.'
-
-    global _follow_file
-    _follow_file = False
-    retry = False
-
-    try:
-        options, args = getopt.getopt(sys.argv[1:], "vfhrNIDTLSC", [
-            "simple", "help", "retry", "version", "verbose"])
-    except getopt.GetoptError as err:
-        print (err)
-        print ("")
-        usage()
-        sys.exit(1)
-
-    for op, p in options:
-        if op == "--version":
-            print_version()
-            sys.exit(1)
-        if op == "-v" or op == "--verbose":
-            _verbose = True
-        if op == "-f":
-            _follow_file = True
-        if op == "-r" or op == "--retry":
-            retry = True
-        if op == "-h" or op == "--help":
-            usage()
-            sys.exit(1)
-        if op == "-N":
-            _skip_name = True
-        if op == "-I":
-            _skip_id = True
-        if op == "-D":
-            _skip_date = True
-        if op == "-T":
-            _skip_time = True
-        if op == "-L":
-            _skip_level = True
-        if op == "-S":
-            _skip_section = True
-        if op == "-C":
-            _skip_code = True
-        if op == "--simple":
-            _print_simple_format = True
-
+    # cat
     if not sys.stdin.isatty():
-        cat()
+        cat(options)
         return
 
-    if len(args) > 0:
-        filename = args[0]
+    # 인자가 없는 경우 도움말 메시지를 출력하고 종료
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+
+    if args.version:
+        print_version()
+        return
+
+    filename = args.filename
+
+    if options.cat:
+        cat_file(filename, options)
+        return
 
     while True:
-        tail(filename, _follow_file)
-        if retry:
+        tail(filename, options)
+        if options.retry:
             time.sleep(1)
         else:
             break
-
 
 if __name__ == '__main__':
     main()
