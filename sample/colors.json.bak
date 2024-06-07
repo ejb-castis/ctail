@@ -1,7 +1,7 @@
 {
     "id": "blue",
     "event": "bright_green",
-    "date": "bright_blue",
+    "date": "bright_magenta",
     "time": "bright_cyan",
     "level": "color_80",
     "section": "color_230",

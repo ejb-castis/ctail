@@ -12,13 +12,14 @@ import re
 import signal
 import sys
 import time
+import json
 
 import chardet
 from dateutil import parser
 
-program_version = "0.1.2"
+program_version = "0.1.3"
 
-Colors = {
+colors = {
     "id": '\033[0;36m',
     "event": '\033[0;38;05;118m',
     "date": '\033[0;34m',
@@ -40,8 +41,8 @@ Colors = {
     "debug": '\033[0;38;05;118m'
 }
 
-Ansi16Colors = {
-    "reset": '\033[0m', # reset
+ansi_colors = {
+    "default": '\033[0m', # reset
     "black": '\033[0;30m',
     "red": '\033[0;31m',
     "green": '\033[0;32m',
@@ -59,6 +60,10 @@ Ansi16Colors = {
     "bright_cyan": '\033[0;96m',
     "bright_white": '\033[0;97m',
 }
+
+def set_256_colors():
+    for i in range(16, 256):
+        ansi_colors[f'color_{i}'] = (f'\033[38;5;{i}m')
 
 event_type_major = {
     0x010000: 'SU',
@@ -111,6 +116,8 @@ class Options:
         self.follow_file = False
         self.fileoffset_repository = {}
         self.last_target_filename = ""
+        self.colors = True
+        self.color_file = None
 
 _fileoffset_repository = {}
 
@@ -128,7 +135,7 @@ def get_offset(filename):
         return 0
 
 def apply_color(text, color_name):
-    ansi_code = Colors.get(color_name, '\033[0m')
+    ansi_code = colors.get(color_name, '\033[0m')
     return f"{ansi_code}{text}\033[0m"
 
 def print_verbose(text):
@@ -213,8 +220,8 @@ def format_eventlog(log, options):
     event = apply_color(event, 'event')
     
     if options.keyword_coloring:
-        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
-        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
     if options.keyvalue_coloring:
         description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
@@ -273,8 +280,8 @@ def format_cilog(log, options):
         code = ""
 
     if options.keyword_coloring:
-        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
-        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
     if options.keyvalue_coloring:
         description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
@@ -421,8 +428,8 @@ def format_simple_log4j(log, options):
     section = apply_color(section, 'where')
 
     if options.keyword_coloring:
-        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
-        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
     if options.keyvalue_coloring:
         description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
@@ -476,8 +483,8 @@ def format_tomcat_log(log, options):
     where = apply_color(where, 'where')
 
     if options.keyword_coloring:
-        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
-        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
     if options.keyvalue_coloring:
         description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
@@ -527,8 +534,8 @@ def format_simplelog(log, options):
         section = ""
 
     if options.keyword_coloring:
-        description = re.sub("\[([^]]+)\]", key_word_coloring, description)
-        description = re.sub("\(([^)]+)\)", key_word_coloring, description)
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
     if options.keyvalue_coloring:
         description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
@@ -549,8 +556,8 @@ def format_simplelog(log, options):
 # """
 def format_simple_trace(log, options):
     if options.keyword_coloring:
-        log = re.sub("\[([^]]+)\]", key_word_coloring, log)
-        log = re.sub("\(([^)]+)\)", key_word_coloring, log)
+        log = re.sub(r"\[([^]]+)\]", key_word_coloring, log)
+        log = re.sub(r"\(([^)]+)\)", key_word_coloring, log)
 
     if options.keyvalue_coloring:
         log = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, log)
@@ -583,9 +590,12 @@ def print_format_log(log, options):
         formatted_log, error = try_format(log, formatter, log_type)
         if not error:
             break
-
-    print(formatted_log, end=' ')
-
+    try:
+        print(formatted_log, end=' ')
+    except BrokenPipeError:
+        exit(1)
+    except Exception:
+        exit(1)
 
 def is_binary(filename):
     """Return true if the given filename is binary.
@@ -712,8 +722,9 @@ def keep_tail(f, options):  # -> (offset, error)
     return offset, False
 
 def detect_file_encoding(file_path):
+    CHUNKSIZE = 1024
     with open(file_path, 'rb') as f:
-        rawdata = f.read()
+        rawdata = f.read(CHUNKSIZE)
     result = chardet.detect(rawdata)
     return result['encoding']
 
@@ -855,7 +866,7 @@ def print_version():
     print (os.path.basename(sys.argv[0]) + ' ' + program_version)
 
 def get_parser():
-    parser = argparse.ArgumentParser(description=f'tail/cat a log or the newest log in a directory. ver: {program_version}')
+    parser = argparse.ArgumentParser(description=f'tail/cat a log or the newest log in a directory, coloring text. config: colors.json, ver: {program_version}')
 
     parser.add_argument('filename', nargs='?', default='.', help='file to process, or directory to process, default: .')
     parser.add_argument('-v', '--verbose', action='store_true', help='enable verbose output')
@@ -874,6 +885,7 @@ def get_parser():
     parser.add_argument('--keyword', action='store_true', help='enable [keyword], (keyword) coloring')
     parser.add_argument('--keyvalue', action='store_true', help='enable key=value coloring')
     parser.add_argument('--version', action='store_true', help='print version information and exit')
+    parser.add_argument('--colors-file', type=str, help='use specified colors config file for coloring')
 
     return parser
 
@@ -893,13 +905,43 @@ def set_options(args, options):
     options.debug = args.debug
     options.keyword_coloring = args.keyword
     options.keyvalue_coloring = args.keyvalue
+    options.colors_file = args.colors_file    
+    
+    if options.colors_file is not None:
+        options.colors = True
 
+def load_colors(options):
+    config_colors = {}
+    if options.colors_file is None:
+        filepath = os.path.join(os.path.dirname(__file__), 'colors.json')
+    else:
+        filepath = options.colors_file
+        
+    try:
+        with open(filepath) as f:
+            config_colors = json.load(f)
+            verbose('Load Colors', f'from {filepath}', options)
+    except Exception as e:
+        verbose('Load Colors, Error', f'{filepath} does not exist, {e}', options)
+        verbose('Colors', f'use default colors', options)
+        return
+            
+    # convert to colors dictionary
+    global colors
+    set_256_colors()
+    
+    for key, value in config_colors.items():
+        colors[key] = ansi_colors.get(value, '\033[0m')
+    
 def main():
     parser = get_parser()
     args = parser.parse_args()
 
     options = Options()
     set_options(args, options)
+
+    if options.colors:
+        load_colors(options)
 
     handler = Handler(options)
     signal.signal(signal.SIGINT, handler.sig_handler)

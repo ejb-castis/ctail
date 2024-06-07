@@ -2,6 +2,16 @@
 
 최신 파일(linux)을 계속해서 tail -f 해주는 python(>=2.4) 스크립트
 
+
+## Dependency
+
+- pytest 8.2.1
+  - pip3 install pytest
+- chardet-5.2.0
+  - pip3 install chardet
+- dateutil
+  - pip3 install python-dateutil
+
 ## 기능
 
 - 폴더 내 최신 텍스트 파일을 자동으로 열어줌
