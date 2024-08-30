@@ -38,7 +38,8 @@ colors = {
     "ip":   '\033[0;95m',
     "user_name":   '\033[0;96m',
     "verbose": '\033[0;38;05;118m',
-    "debug": '\033[0;38;05;118m'
+    "debug": '\033[0;38;05;118m',
+    "channel":   '\033[0;32m',
 }
 
 ansi_colors = {
@@ -293,6 +294,61 @@ def format_cilog(log, options):
 
     return ','.join([name, id, date, time, level, section, code, description]), False, ""
 
+def format_lgufastlog(log, options):
+    try:
+        name, id, channel, date, time, level, section, code, description = log.split(',', 8)
+    except Exception as e:
+        return log, True, str(e)
+    
+    name = apply_color(name, 'name')
+    if options.skip_name:
+        name = ""
+
+    id = apply_color(id, 'id')
+    if options.skip_id:
+        id = ""
+
+    channel = apply_color(channel, 'channel')
+
+    if is_valid_date(date + ' ' + time) == None:
+        return log, True, "Invalid date time format"
+    
+    date = apply_color(date, 'date')
+    if options.skip_date:
+        date = ""
+
+    time = apply_color(time, 'time')
+    if options.skip_time:
+        time = ""
+
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level, 'error')
+    else:
+        level = apply_color(level, 'level')
+    if options.skip_level:
+        level = ""
+
+    section = apply_color(section, 'section')
+    if options.skip_section:
+        section = ""
+
+    code = apply_color(code, 'code')
+    if options.skip_code:
+        code = ""
+
+    if options.keyword_coloring:
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
+
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
+
+    description = apply_color(description, 'description')
+
+    if options.print_simple_format:
+        return ','.join([level, date, time, section, code, description]), False, ""
+
+    return ','.join([name, id, channel, date, time, level, section, code, description]), False, ""
 
 # "127.0.0.1 - - [01/Jan/2000:00:00:00 +0000] \"GET /index.html HTTP/1.1\" 200 2326 \"-\" \"Mozilla/5.0\""
 #"127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" 200 2326 \"http://www.example.com/start.html\" \"Mozilla/4.08 [en] (Win98; I ;Nav)\""
@@ -578,6 +634,7 @@ def print_format_log(log, options):
     formatters = [
         (format_eventlog, 'EVENTLOG'),
         (format_cilog, 'CILOG'),
+        (format_lgufastlog, 'LGUFASTLOG'),
         (format_ncsacombinedlog, 'NCSACOMBINE'),
         (format_ncsalog, 'NCSA'),
         (format_simple_log4j, 'LOG4J'),

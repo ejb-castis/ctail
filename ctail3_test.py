@@ -1,7 +1,13 @@
 import pytest
 
-from ctail3 import (Options, format_ncsacombinedlog, format_simple_log4j,
-                    format_simple_trace)
+from ctail3 import (
+    Options,
+    format_cilog,
+    format_lgufastlog,
+    format_ncsacombinedlog,
+    format_simple_log4j,
+    format_simple_trace
+    )
 
 
 @pytest.fixture
@@ -10,6 +16,26 @@ def setup():
     print("Setting up and Go")
     print("=====================================")
 
+
+def test_format_lgufastlog(setup):    
+    options = Options()
+    options.skip_date = False
+    options.skip_time = False
+
+    log = "SSAIScheduler,1.0.64,,2024-08-29,00:00:00.000,INFO,ScheduleManagerScheduler(198),,\"CheckCdpChannel - start\""
+    formatted_log, error, msg = format_lgufastlog(log, options)
+    print(formatted_log, error, msg)
+
+
+    log = "SSAIScheduler,1.0.64,thekids_test_20240520,2024-08-29,00:00:00.000,INFO,WorkerTask(66),,\"Stop to send adSchedule, channel : thekids_test_20240520\""
+    formatted_log, error, msg = format_lgufastlog(log, options)
+    print(formatted_log, error, msg)
+
+    # assert error == False
+    # assert "127.0.0.1" in formatted_log
+    # assert "200" in formatted_log
+    # assert "/index.html" in formatted_log
+    
 
 def test_format_ncsacombinedlog(setup):
     options = Options()
