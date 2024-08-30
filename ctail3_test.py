@@ -1,12 +1,13 @@
 import pytest
 
 from ctail3 import (
-    Options,
+    Options,    
     format_cilog,
     format_lgufastlog,
     format_ncsacombinedlog,
     format_simple_log4j,
-    format_simple_trace
+    format_simple_trace,
+    parse_lgufastlog
     )
 
 
@@ -16,6 +17,12 @@ def setup():
     print("Setting up and Go")
     print("=====================================")
 
+
+def test_parse_lgufastlog(setup):
+    log = "SSAIScheduler,1.0.64,,2024-08-29,00:00:00.000,INFO,ScheduleManagerScheduler(198),,\"CheckCdpChannel - start\""
+    log_parts, error, msg = parse_lgufastlog(log)
+    print(log_parts, error, msg)
+    
 
 def test_format_lgufastlog(setup):    
     options = Options()

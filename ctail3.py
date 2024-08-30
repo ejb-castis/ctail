@@ -200,6 +200,21 @@ def key_value_coloring(match):
 def key_word_coloring(match):
     return apply_color(f'{match.group()}', 'keyword')
 
+def parse_eventlog(log):
+    if log.startswith('0x'):
+        log, error, msg = translate(log)
+        if error:
+            return [], True, msg
+    else:
+        return [], True, "Not eventlog format, does not start with '0x'"
+
+    try:
+        event, level, datetime, description = log.split(',', 3)
+    except Exception as e:
+        return [], True, str(e)
+    
+    return [event, level, datetime, description], False, ""
+
 def format_eventlog(log, options):
     if log.startswith('0x'):
         log, error, msg = translate(log)
@@ -239,6 +254,14 @@ def format_eventlog(log, options):
         return '%s %s %s %s' % (level, datetime, event, description), False, ""
 
     return '%s %s %s %s' % (datetime, event, level, description), False, ""
+
+def parse_cilog(log):
+    try:
+        name, id, date, time, level, section, code, description = log.split(',', 7)
+    except Exception as e:
+        return [], True, str(e)
+    
+    return [name, id, date, time, level, section, code, description], False, ""
 
 def format_cilog(log, options):
     try:
@@ -294,11 +317,20 @@ def format_cilog(log, options):
 
     return ','.join([name, id, date, time, level, section, code, description]), False, ""
 
-def format_lgufastlog(log, options):
+def parse_lgufastlog(log):
     try:
         name, id, channel, date, time, level, section, code, description = log.split(',', 8)
     except Exception as e:
-        return log, True, str(e)
+        return [], True, str(e)
+    
+    return [name, id, channel, date, time, level, section, code, description], False, ""
+
+def format_lgufastlog(log, options):
+    log_parts, error, msg = parse_lgufastlog(log)
+    if error:
+        return log, True, msg
+
+    name, id, channel, date, time, level, section, code, description = log_parts
     
     name = apply_color(name, 'name')
     if options.skip_name:
@@ -387,6 +419,24 @@ def is_valid_ncsa_date(date_str):
     except ValueError:
         return False
 
+def parse_ncsacombinedlog(log):
+    try:
+        host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
+    except Exception as e:
+        return [], True, str(e)
+
+    if not is_valid_ip(host):
+        return [], True, "Invalid IP address"
+    
+    if not datetime.startswith('[') or not tz.endswith(']'):
+        return [], True, "Invalid datetime format"
+    
+    date_str = ''.join(datetime+' '+tz).strip('[]')
+    if not is_valid_ncsa_date(date_str):
+        return [], True, "Invalid date format"
+
+    return [host, id, username, datetimetz, request, statuscode, bytes, combined], False, ""
+
 def format_ncsacombinedlog(log, options):
     try:
         host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
@@ -431,6 +481,26 @@ def format_ncsacombinedlog(log, options):
 # status: HTTP 응답 상태 코드.
 # bytes: 클라이언트에 전송된 응답의 크기 (바이트 단위).
 # 127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326
+
+def parse_ncsalog(log):
+    try:
+        host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
+    except Exception as e:
+        return [], True, str(e)
+    
+    if not is_valid_ip(host):
+        return [], True, "Invalid IP address"
+    
+    if not datetimetz.startswith('[') or not datetimetz.endswith(']'):
+        return [], True, "Invalid datetime format"
+    
+    date_str = ' '.join(datetimetz).strip('[]')
+    if not is_valid_ncsa_date(date_str):
+        return [], True, "Invalid date format"
+    
+    return [host, id, username, datetimetz, request, statuscode, bytes], False, ""    
+
+
 def format_ncsalog(log, options):
     try:
         host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
@@ -465,6 +535,17 @@ def format_ncsalog(log, options):
     return '%s %s %s %s %s %s %s' % (host, id, username, datetimetz, request, statuscode, bytes), False, ""
 
 # 2024-05-15 20:01:53,[INFO ],LocalContainerEntityManagerFactoryBean.java,createNativeEntityManagerFactory(349):"Building JPA container EntityManagerFactory for persistence unit 'cbank'"
+
+def parse_simple_log4j(log):
+    try:
+        datetime, level, rest = log.split(',', 2)
+        section, description = rest.split(':', 1)
+        date, time = datetime.split(' ', 1)
+    except Exception as e:
+        return [], True, str(e)
+    
+    return [date, time, level, section, description], False, ""
+
 def format_simple_log4j(log, options):
     try:
         datetime, level, rest = log.split(',', 2)
@@ -520,6 +601,17 @@ def is_valid_date(date_str):
     except ValueError:
         return None
 
+def parse_tomcat_log(log):
+    try:
+        date, time, level, section, where, description = log.split(' ', 5)
+    except Exception as e:
+        return [], True, str(e)
+    
+    if is_valid_date(date+' '+time) == None:
+        return [], True, 'invalid date'
+
+    return [date, time, level, section, where, description], False, ""
+
 def format_tomcat_log(log, options):
     try:
         date, time, level, section, where, description = log.split(' ', 5)
@@ -560,6 +652,17 @@ def format_tomcat_log(log, options):
         return '%s %s %s %s %s %s' % (level, date, time, section, where, description), False, ""
 
     return '%s %s %s %s %s %s' % (date, time, level, section, where, description), False, ""
+
+def parse_simplelog(log):
+    try:
+        level, date, time, section, description = log.split(' ', 4)
+    except Exception as e:
+        return [], True, str(e)
+
+    if is_valid_date(date + ' ' + time) == None:
+        return [], True, "Invalid date time format"
+    
+    return [level, date, time, section, description], False, ""
 
 def format_simplelog(log, options):
     try:
