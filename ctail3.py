@@ -216,17 +216,11 @@ def parse_eventlog(log):
     return [event, level, datetime, description], False, ""
 
 def format_eventlog(log, options):
-    if log.startswith('0x'):
-        log, error, msg = translate(log)
-        if error:
-            return log, True, msg
-    else:
-        return log, True, "Not eventlog format, does not start with '0x'"
-
-    try:
-        event, level, datetime, description = log.split(',', 3)
-    except Exception as e:
-        return log, True, str(e)
+    log_parts, error, msg = parse_eventlog(log)
+    if error:
+        return log, True, msg
+    
+    level, event, datetime, description = log_parts
     
     if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
         level = apply_color(level,'error')
@@ -264,11 +258,12 @@ def parse_cilog(log):
     return [name, id, date, time, level, section, code, description], False, ""
 
 def format_cilog(log, options):
-    try:
-        name, id, date, time, level, section, code, description = log.split(',', 7)
-    except Exception as e:
-        return log, True, str(e)
+    log_parts, error, msg = parse_cilog(log)
+    if error:
+        return log, True, msg
     
+    name, id, date, time, level, section, code, description = log_parts
+            
     name = apply_color(name, 'name')
     if options.skip_name:
         name = ""
@@ -435,23 +430,14 @@ def parse_ncsacombinedlog(log):
     if not is_valid_ncsa_date(date_str):
         return [], True, "Invalid date format"
 
-    return [host, id, username, datetimetz, request, statuscode, bytes, combined], False, ""
+    return [host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined], False, ""
 
 def format_ncsacombinedlog(log, options):
-    try:
-        host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log.split(' ', 10)
-    except Exception as e:
-        return log, True, str(e)
+    log_parts, error, msg = parse_ncsacombinedlog(log)
+    if error:
+        return log, True, msg
     
-    if not is_valid_ip(host):
-        return log, True, "Invalid IP address"
-    
-    if not datetime.startswith('[') or not tz.endswith(']'):
-        return log, True, "Invalid datetime format"
-    
-    date_str = ''.join(datetime+' '+tz).strip('[]')
-    if not is_valid_ncsa_date(date_str):
-        return log, True, "Invalid date format"
+    host, id, username, datetime, tz, method, uri, version, statuscode, bytes, combined = log_parts
     
     host = apply_color(host, 'ip')
     id = apply_color(id, 'id')
@@ -498,24 +484,15 @@ def parse_ncsalog(log):
     if not is_valid_ncsa_date(date_str):
         return [], True, "Invalid date format"
     
-    return [host, id, username, datetimetz, request, statuscode, bytes], False, ""    
+    return [host, id, username, datetime, tz, method, uri, version, statuscode, bytes], False, ""
 
 
 def format_ncsalog(log, options):
-    try:
-        host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log.split(' ', 9)
-    except Exception as e:
-        return log, True, str(e)
+    log_parts, error, msg = parse_ncsalog(log)
+    if error:
+        return log, True, msg
     
-    if not is_valid_ip(host):
-        return log, True, "Invalid IP address"
-    
-    if not datetimetz.startswith('[') or not datetimetz.endswith(']'):
-        return log, True, "Invalid datetime format"
-    
-    date_str = ' '.join(datetimetz).strip('[]')
-    if not is_valid_ncsa_date(date_str):
-        return log, True, "Invalid date format"
+    host, id, username, datetime, tz, method, uri, version, statuscode, bytes = log_parts
     
     host = apply_color(host, 'ip')
     id = apply_color(id, 'id')
@@ -547,12 +524,11 @@ def parse_simple_log4j(log):
     return [date, time, level, section, description], False, ""
 
 def format_simple_log4j(log, options):
-    try:
-        datetime, level, rest = log.split(',', 2)
-        section, description = rest.split(':', 1)
-        date, time = datetime.split(' ', 1)
-    except Exception as e:
-        return log, True, str(e)
+    log_parts, error, msg = parse_simple_log4j(log)
+    if error:
+        return log, True, msg
+    
+    date, time, level, section, description = log_parts
     
     date = apply_color(date, 'date')
     time = apply_color(time, 'time')
