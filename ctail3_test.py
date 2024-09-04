@@ -1,7 +1,8 @@
 import pytest
 
 from ctail3 import (
-    Options,    
+    Options,
+    format_eventlog,    
     format_cilog,
     format_lgufastlog,
     format_ncsacombinedlog,
@@ -17,6 +18,14 @@ def setup():
     print("Setting up and Go")
     print("=====================================")
 
+def test_eventlog(setup):
+    options = Options()
+
+    log = "0x010001,8,1633072800,AbstractHandlerMethodMapping.java,{[/admin/getTransferApprovalRequestStatusHistoryList],methods=[POST]}\" onto public cbank.util.DataTableObject cbank.controller.AdminController.getTransferApprovalRequestStatusHistoryList(org.springframework.ui.Model,javax.servlet.http.HttpServletRequest,java.lang.String,java.lang.String,int,int,int)n\""
+    formatted_log, error, msg = format_eventlog(log, options)
+    print(formatted_log, error, msg)
+    
+    assert error == False
 
 def test_parse_lgufastlog(setup):
     log = "SSAIScheduler,1.0.64,,2024-08-29,00:00:00.000,INFO,ScheduleManagerScheduler(198),,\"CheckCdpChannel - start\""
@@ -32,6 +41,8 @@ def test_format_lgufastlog(setup):
     log = "SSAIScheduler,1.0.64,,2024-08-29,00:00:00.000,INFO,ScheduleManagerScheduler(198),,\"CheckCdpChannel - start\""
     formatted_log, error, msg = format_lgufastlog(log, options)
     print(formatted_log, error, msg)
+    
+    assert error == False
 
 
     log = "SSAIScheduler,1.0.64,thekids_test_20240520,2024-08-29,00:00:00.000,INFO,WorkerTask(66),,\"Stop to send adSchedule, channel : thekids_test_20240520\""

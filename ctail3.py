@@ -13,6 +13,7 @@ import signal
 import sys
 import time
 import json
+from collections import OrderedDict # for python 3.6
 
 import chardet
 from dateutil import parser
@@ -153,6 +154,13 @@ def debug(heading, message, options):
     if options.debug:
         print_debug(f'{heading}: {message}')
 
+def apply_color_to_log_parts(log_map):
+    log_map['level'] = apply_color(log_map['level'], 'level')
+    log_map['event'] = apply_color(log_map['event'], 'event')
+    log_map['datetime'] = apply_color(log_map['datetime'], 'date')
+    log_map['description'] = apply_color(log_map['description'], 'description')
+    return log_map
+
 def get_event_type_string(event):
     try:
         s = event_type_major[int(event, 0) & 0xFFFF0000]
@@ -161,7 +169,6 @@ def get_event_type_string(event):
         return s
     except Exception as e:
         return ''
-
 
 def get_event_level_string(level):
     try:
@@ -204,39 +211,47 @@ def parse_eventlog(log):
     if log.startswith('0x'):
         log, error, msg = translate(log)
         if error:
-            return [], True, msg
+            return None, True, msg
     else:
-        return [], True, "Not eventlog format, does not start with '0x'"
+        return None, True, "Not eventlog format, does not start with '0x'"
 
     try:
         event, level, datetime, description = log.split(',', 3)
     except Exception as e:
-        return [], True, str(e)
-    
-    return [event, level, datetime, description], False, ""
+        return None, True, str(e)
+        
+    return OrderedDict([
+        ("event", event)
+        , ("level", level)
+        , ("datetime", datetime)
+        , ("description", description)
+    ]), False, ""
 
 def format_eventlog(log, options):
-    log_parts, error, msg = parse_eventlog(log)
+    log_map, error, msg = parse_eventlog(log)
     if error:
         return log, True, msg
-    
-    level, event, datetime, description = log_parts
-    
-    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
-        level = apply_color(level,'error')
-    else:
-        level = apply_color(level, 'level')
 
-    event = apply_color(event, 'event')
+    apply_color_to_log_parts(log_map)
+    event, level, datetime, description = log_map.values()
+
+    # event, level, datetime, description = log_parts
+        
+    # if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+    #     level = apply_color(level,'error')
+    # else:
+    #     level = apply_color(level, 'level')
+
+    # event = apply_color(event, 'event')
     
-    if options.keyword_coloring:
-        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
-        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
+    # if options.keyword_coloring:
+    #     description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+    #     description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
-    if options.keyvalue_coloring:
-        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
+    # if options.keyvalue_coloring:
+    #     description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
 
-    description = apply_color(description, 'description')
+    # description = apply_color(description, 'description')
 
     if options.skip_date and options.skip_time:
         datetime = ""
