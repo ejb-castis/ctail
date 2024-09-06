@@ -737,7 +737,7 @@ def print_format_log(log, options):
         (format_simple_trace, 'TRACE')
     ]
 
-    for formatter, log_type in formatters[0:]:
+    for formatter, log_type in formatters:
         formatted_log, error = try_format(log, formatter, log_type)
         if not error:
             break
