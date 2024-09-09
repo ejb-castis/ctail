@@ -220,38 +220,30 @@ def parse_eventlog(log):
     except Exception as e:
         return None, True, str(e)
         
-    return OrderedDict([
-        ("event", event)
-        , ("level", level)
-        , ("datetime", datetime)
-        , ("description", description)
-    ]), False, ""
+    return [event, level, datetime, description], False, ""
 
 def format_eventlog(log, options):
-    log_map, error, msg = parse_eventlog(log)
+    log_parts, error, msg = parse_eventlog(log)
     if error:
         return log, True, msg
 
-    apply_color_to_log_parts(log_map)
-    event, level, datetime, description = log_map.values()
-
-    # event, level, datetime, description = log_parts
+    event, level, datetime, description = log_parts
         
-    # if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
-    #     level = apply_color(level,'error')
-    # else:
-    #     level = apply_color(level, 'level')
+    if level.strip("[] ").lower() in ['severe', 'error', 'fail', 'warning', 'exception', 'except', 'critical']:
+        level = apply_color(level,'error')
+    else:
+        level = apply_color(level, 'level')
 
-    # event = apply_color(event, 'event')
+    event = apply_color(event, 'event')
     
-    # if options.keyword_coloring:
-    #     description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
-    #     description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
+    if options.keyword_coloring:
+        description = re.sub(r"\[([^]]+)\]", key_word_coloring, description)
+        description = re.sub(r"\(([^)]+)\)", key_word_coloring, description)
 
-    # if options.keyvalue_coloring:
-    #     description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
+    if options.keyvalue_coloring:
+        description = re.sub(r"[a-zA-Z0-9_\-]+\s?=\s?[a-zA-Z0-9_/@$#%&\.\^\-\[\]]+", key_value_coloring, description)
 
-    # description = apply_color(description, 'description')
+    description = apply_color(description, 'description')
 
     if options.skip_date and options.skip_time:
         datetime = ""
