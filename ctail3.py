@@ -18,7 +18,7 @@ from collections import OrderedDict # for python 3.6
 import chardet
 from dateutil import parser
 
-program_version = "0.1.3"
+program_version = "0.1.4"
 
 colors = {
     "id": '\033[0;36m',
@@ -869,15 +869,20 @@ def detect_file_encoding(file_path):
     with open(file_path, 'rb') as f:
         rawdata = f.read(CHUNKSIZE)
     result = chardet.detect(rawdata)
-    return result['encoding']
+    encoding = result['encoding']
+    confidence = result.get('confidence', 0)
+    if encoding is None or encoding.lower() == 'ascii' or    confidence < 0.9:
+        encoding = 'utf-8'
+    return encoding
 
 def open_tail(filename, options, offset=0):
     encoding = detect_file_encoding(filename)
     verbose('Open', f'{filename}, detected encoding is {encoding}', options)
-    
     try:
         f = open(filename, 'r', encoding=encoding, errors='replace')
-    except Exception as e:
+    except Exception:
+        # 인코딩 감지 실패 시 utf-8로 재시도
+        f = open(filename, 'r', encoding='utf-8', errors='replace')
         verbose('Open Error', f'{filename}, {e}', options)
         return None, True
     try:
@@ -1061,7 +1066,7 @@ def load_colors(options):
         filepath = options.colors_file
         
     try:
-        with open(filepath) as f:
+        with open(filepath, encoding='utf-8') as f:
             config_colors = json.load(f)
             verbose('Load Colors', f'from {filepath}', options)
     except Exception as e:
